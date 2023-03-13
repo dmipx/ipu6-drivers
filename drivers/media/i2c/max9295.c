@@ -302,8 +302,10 @@ int max9295_setup_control(struct device *dev)
 	u8 addr_offset[] = {
 		0x80, 0x00, 0x00,
 		0x84, 0x00, 0x01,
+		0x88, 0x00, 0x01,
 		0xC0, 0x02, 0x02,
 		0xC4, 0x02, 0x03,
+		0xC8, 0x02, 0x03,
 	};
 
 	mutex_lock(&priv->lock);
@@ -318,17 +320,16 @@ int max9295_setup_control(struct device *dev)
 
 #ifdef CONFIG_OF
  	if (prim_priv__) {
- 		/* update address reassingment */
+ 		/* update address reassignment */
  		max9295_write_reg(&prim_priv__->i2c_client->dev,
  				MAX9295_DEV_ADDR, (g_ctx->ser_reg << 1));
  	}
 #else
 	if (priv->def_addr) {
-		/* update address reassingment */
+		/* update address reassignment */
 		struct i2c_client *c = to_i2c_client(dev);
 		int addr = c->addr;
-dev_info(dev, "%s: update address reassingment 0x%x->0x%x\n", __func__,priv->def_addr, g_ctx->ser_reg);
-dev_info(dev, "%s: addr: 0x%x->0x%x\n", __func__,addr, priv->def_addr);
+		dev_info(dev, "%s: update address reassignment 0x%x->0x%x\n", __func__,priv->def_addr, g_ctx->ser_reg);
 		c->addr = priv->def_addr;
 		max9295_write_reg(dev,
 				MAX9295_DEV_ADDR, (g_ctx->ser_reg << 1));
