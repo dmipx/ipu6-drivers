@@ -1671,8 +1671,11 @@ static int ds5_configure_ir(struct ds5 *state)
 	 * Set depth stream Z16 data type as 0x31
 	 * Set IR stream Y8I data type as 0x32
 	 */
-	//if (sensor->config.format->data_type == 0x1e)
+	if (sensor->config.format->data_type == GMSL_CSI_DT_YUV422_8) // 1e
 		ret = ds5_write(state, dt_addr, 0x32);
+	else
+		ret = ds5_write(state, dt_addr, sensor->config.format->data_type);
+
 	if (ret < 0)
 		return ret;
 
