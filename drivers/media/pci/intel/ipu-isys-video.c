@@ -2398,6 +2398,7 @@ int ipu_isys_video_set_streaming(struct ipu_isys_video *av,
 				 esd->v4l2_dev->mdev,
 				 &cs);
 #endif
+		rval = v4l2_subdev_call(esd, video, s_stream, state);
 	}
 
 	mutex_lock(&mdev->graph_mutex);
@@ -2466,6 +2467,7 @@ int ipu_isys_video_set_streaming(struct ipu_isys_video *av,
 #endif
 		if (rval)
 			goto out_media_entity_stop_streaming_firmware;
+		rval = v4l2_subdev_call(esd, video, s_stream, state);
 	} else {
 		close_streaming_firmware(av);
 		av->ip.vc = INVALIA_VC_ID;
