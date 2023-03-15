@@ -3288,8 +3288,8 @@ static int ds5_board_setup(struct ds5 *state)
 	int i;
 
 	static struct max9295_pdata max9295_pdata = {
-    	.is_prim_ser = 0, // todo: configurable
-    	.def_addr = 0, // todo: configurable
+    	.is_prim_ser = 1, // todo: configurable
+    	.def_addr = 0x40, // todo: configurable
 	};
 	static struct i2c_board_info i2c_info_des = {
         I2C_BOARD_INFO("max9296", 0x48),
@@ -3337,8 +3337,8 @@ static int ds5_board_setup(struct ds5 *state)
 	dev_info(dev, "Address reassignment for %s-%c 0x%x->0x%x\n",
 		pdata->subdev_info[0].board_info.type, pdata->suffix,
 		state->g_ctx.sdev_def, state->g_ctx.sdev_reg);
-
-	state->g_ctx.ser_reg = pdata->subdev_info[0].ser_alias; //0x42, 0x44, 0x62, 0x64
+ 	//0x42, 0x44, 0x62, 0x64
+	state->g_ctx.ser_reg = pdata->subdev_info[0].ser_alias;
 	dev_info(dev,  "serializer: i2c-%d@0x%x\n",
 		state->ser_i2c->adapter->nr, state->g_ctx.ser_reg);
 
@@ -3421,7 +3421,7 @@ static int ds5_gmsl_serdes_setup(struct ds5 *state)
 		dev_err(dev, "gmsl deserializer link config failed\n");
 		goto error;
 	}
-
+	msleep(100);
 	err = max9295_setup_control(state->ser_dev);
 
 	/* proceed even if ser setup failed, to setup deser correctly */
@@ -3439,72 +3439,43 @@ error:
 	mutex_unlock(&serdes_lock__);
 	return err;
 }
+#define PLATFORM_AXIOMTEK 1
+#ifdef PLATFORM_AXIOMTEK
+static short serdes_bus[4] = {5, 5, 5, 5};
+#else
+static short serdes_bus[4] = {2, 2, 4, 4};
+#endif
+module_param_array(serdes_bus, ushort, NULL, 0444);
+MODULE_PARM_DESC(serdes_bus, "max9295/6 deserializer i2c bus, "
+        "serdes_bus=muxa,muxb,muxc,muxd"
+        "default =2,2,4,4");
+
+// Deserializer addresses can be 0x40 0x48 0x4a
+#ifdef PLATFORM_AXIOMTEK
+static unsigned short des_addr[4] = {0x48, 0x4a, 0x68, 0x6c};
+#else
+static unsigned short des_addr[4] = {0x48, 0x4a, 0x48, 0x4a};
+#endif
+module_param_array(des_addr, ushort, NULL, 0444);
+MODULE_PARM_DESC(des_addr, "max9296 deserializer i2c address, "
+        "ser_addr=muxa,muxb,muxc,muxd"
+        "default =0x48,0x4a,0x48,0x4a");
 
 static int ds5_i2c_addr_setting(struct i2c_client *c, struct ds5 *state)
 {
-	int ret;
+	int ret = 0;
+	int i = 0;
 	int c_addr_save = c->addr;
-
-	c->addr = 0x48;
-	dev_info(&c->dev, "Set max9296@0x%x to link B\n", c->addr);
-	ds5_write_8(state, 0x1000, 0x22); // move to link B
-	c->addr = 0x4a;
-	dev_info(&c->dev, "Set max9296@0x%x to link B\n", c->addr);
-	ds5_write_8(state, 0x1000, 0x22); // move to link B
-	c->addr = 0x68;
-	dev_info(&c->dev, "Set max9296@0x%x to link B\n", c->addr);
-	ds5_write_8(state, 0x1000, 0x22); // move to link B
-	c->addr = 0x6c;
-	dev_info(&c->dev, "Set max9296@0x%x to link B\n", c->addr);
-	ds5_write_8(state, 0x1000, 0x22); // move to link B
-
-// mux d
- 	c->addr = 0x6c;
- 	dev_info(&c->dev, "Set max9296@0x%x to link A\n", c->addr);
- 	ds5_write_8(state, 0x1000, 0x21); // move to link A
- 	msleep_range(100);
-
-	c->addr = 0x40;
-	dev_info(&c->dev, "Set max9295@0x%x->0x64 \n", c->addr);
-	ret = ds5_write_8(state, 0x0000, 0xc8); // 0x40->0x64
-	if (ret)
-		dev_warn(&c->dev, "Camera d not found \n");
-
-// mux c
-	c->addr = 0x68;
-	dev_info(&c->dev, "Set max9296@0x%x to link A\n", c->addr);
-	ds5_write_8(state, 0x1000, 0x21);// move to link A
-	msleep_range(100);
-
-	c->addr = 0x40;
-	dev_info(&c->dev, "Set max9295@0x%x->0x62 \n", c->addr);
-	ret = ds5_write_8(state, 0x0000, 0xc4); // 0x40->0x62
-	if (ret)
-		dev_warn(&c->dev, "Camera c not found \n");
-
-// mux b
-	c->addr = 0x4a;
-	dev_info(&c->dev, "Set max9296@0x%x to link A\n", c->addr);
-	ds5_write_8(state, 0x1000, 0x21);// move to link A
-	msleep_range(100);
-
-	c->addr = 0x40;
-	dev_info(&c->dev, "Set max9295@0x%x->0x44 \n", c->addr);
-	ret = ds5_write_8(state, 0x0000, 0x88); // 0x40->0x44
-	if (ret)
-		dev_warn(&c->dev, "Camera b not found \n");
-// mux a
-	c->addr = 0x48;
-	dev_info(&c->dev, "Set max9296@0x%x to link A\n", c->addr);
-	ds5_write_8(state, 0x1000, 0x21);// move to link A
-	msleep_range(100);
-
-	c->addr = 0x40;
-	dev_info(&c->dev, "Set max9295@0x%x->0x42 \n", c->addr);
-	ret = ds5_write_8(state, 0x0000, 0x84); // 0x40->0x42
-	if (ret)
-		dev_warn(&c->dev, "Camera a not found \n");
-
+	int c_bus = c->adapter->nr;
+	for (i = 0; i < 4; i++) {
+		if (c_bus == serdes_bus[i]) {
+			c->addr = des_addr[i];
+			dev_info(&c->dev, "Set max9296@%d-0x%x to link B\n",
+					c_bus, c->addr);
+			ds5_write_8(state, 0x1000, 0x22); // move to link B
+		}
+	}
+	// restore original slave address
 	c->addr = c_addr_save;
 
 	return 0;
@@ -3513,10 +3484,25 @@ static int ds5_i2c_addr_setting(struct i2c_client *c, struct ds5 *state)
 static int ds5_serdes_setup(struct ds5 *state)
 {
 	int ret = 0;
+	int i = 0, c_bus = 0;
 	struct i2c_client *c = state->client;
+	int c_bus_new = c->adapter->nr;
 
-	if (c->addr == D4XX_I2C_ADDRESS_1) {
-		dev_info(&c->dev, "Apply multiple camera i2c addr setting\n");
+	for (i = 0; i < MAX_DEV_NUM; i++) {
+		if (serdes_inited[i] && serdes_inited[i]->dser_i2c) {
+			c_bus = serdes_inited[i]->dser_i2c->adapter->nr;
+			if (c_bus == c->adapter->nr) {
+				dev_info(&c->dev, "Already configured multiple camera for bus %d\n", c_bus);
+				c_bus_new = 0;
+				break;
+			}
+		} else {
+			break;
+		}
+	}
+
+	if (c_bus_new) {
+		dev_info(&c->dev, "Apply multiple camera i2c addr setting for bus %d\n", c_bus_new);
 		ret = ds5_i2c_addr_setting(c, state);
 		if (ret) {
 			dev_err(&c->dev, "failed apply i2c addr setting\n");
