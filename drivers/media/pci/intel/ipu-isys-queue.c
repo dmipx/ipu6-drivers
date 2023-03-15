@@ -610,7 +610,7 @@ static void __buf_queue(struct vb2_buffer *vb, bool force)
 				"error: buffer list get failed\n");
 			WARN_ON(1);
 		} else {
-			dev_info(&av->isys->adev->dev,
+			dev_dbg(&av->isys->adev->dev,
 				"not enough buffers available\n");
 		}
 		goto out;
