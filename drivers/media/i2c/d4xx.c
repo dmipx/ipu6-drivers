@@ -1427,7 +1427,7 @@ dev_info(&state->client->dev,
 static int ds5_configure(struct ds5 *state)
 {
 	struct ds5_sensor *sensor;
-	u16 md_fmt, vc_id;
+	u16 fmt, md_fmt, vc_id;
 #ifdef CONFIG_VIDEO_D4XX_SERDES
 	u16 data_type1, data_type2;
 #endif
@@ -1491,6 +1491,47 @@ static int ds5_configure(struct ds5 *state)
 	if (ret < 0)
 		return ret;
 #endif
+
+	fmt = sensor->streaming ? sensor->config.format->data_type : 0;
+
+	/*
+	 * Set depth stream Z16 data type as 0x31
+	 * Set IR stream Y8I data type as 0x32
+	 */
+	if (state->is_depth && fmt != 0)
+		ret = ds5_write(state, dt_addr, 0x31);
+	else if (state->is_y8 && fmt != 0 &&
+		 sensor->config.format->data_type == GMSL_CSI_DT_YUV422_8)
+		ret = ds5_write(state, dt_addr, 0x32);
+	else
+		ret = ds5_write(state, dt_addr, fmt);
+	if (ret < 0)
+		return ret;
+
+	ret = ds5_write(state, md_addr, (vc_id << 8) | md_fmt);
+	if (ret < 0)
+		return ret;
+
+	if (!sensor->streaming)
+		return ret;
+
+	if (override_addr != 0) {
+		ret = ds5_write(state, override_addr, fmt);
+		if (ret < 0)
+			return ret;
+	}
+
+	ret = ds5_write(state, fps_addr, sensor->config.framerate);
+	if (ret < 0)
+		return ret;
+
+	ret = ds5_write(state, width_addr, sensor->config.resolution->width);
+	if (ret < 0)
+		return ret;
+
+	ret = ds5_write(state, height_addr, sensor->config.resolution->height);
+	if (ret < 0)
+		return ret;
 
 	return 0;
 }
