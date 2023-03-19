@@ -16,7 +16,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-#define CONFIG_VIDEO_INTEL_IPU6 1
 #include <linux/delay.h>
 #include <linux/gpio.h>
 #include <linux/i2c.h>
@@ -33,7 +32,10 @@
 
 #ifdef CONFIG_VIDEO_INTEL_IPU6
 #include <linux/ipu-isys.h>
-#include <media/ipu-isys.h>
+#else
+#define V4L2_CID_IPU_BASE	(V4L2_CID_USER_BASE + 0x1080)
+#define V4L2_CID_IPU_QUERY_SUB_STREAM	(V4L2_CID_IPU_BASE + 4)
+#define V4L2_CID_IPU_SET_SUB_STREAM	(V4L2_CID_IPU_BASE + 5)
 #endif
 #include <media/media-entity.h>
 #include <media/v4l2-ctrls.h>
@@ -410,9 +412,6 @@ struct ds5_des {
 #define ds5_mux_subdev camera_common_data
 #else
 struct ds5_mux_subdev {
-#ifdef CONFIG_VIDEO_INTEL_IPU6
-	struct sensor_async_subdev asd;
-#endif
 	struct v4l2_subdev subdev;
 };
 #endif
@@ -472,8 +471,10 @@ struct ds5 {
 	/* All below pointers are used for writing, cannot be const */
 	struct mutex lock;
 	struct regmap *regmap;
+#ifndef CONFIG_VIDEO_D4XX_SERDES
 	struct regmap *regmap_max9296;
 	struct regmap *regmap_max9295;
+#endif
 	struct regulator *vcc;
 	const struct ds5_variant *variant;
 	int is_depth;
@@ -506,7 +507,7 @@ static inline void msleep_range(unsigned int delay_base)
 {
 	usleep_range(delay_base * 1000, delay_base * 1000 + 500);
 }
-#ifdef D4XX_SERDES_IPU
+#ifndef CONFIG_VIDEO_D4XX_SERDES
 static int max9296_write_8(struct ds5 *state, u16 reg, u8 val)
 {
 	int ret;
@@ -2240,7 +2241,9 @@ static int ds5_s_ctrl(struct v4l2_ctrl *ctrl)
 		if (on == 0) {
 			ret = ds5_s_state(state, vc_id);
 		}
-		// ret = ds5_mux_s_stream_vc(state, vc_id, on);
+#ifndef CONFIG_VIDEO_D4XX_SERDES
+		ret = ds5_mux_s_stream(state, on);
+#endif
 		ret = 0;
 		break;
 	}
@@ -3220,7 +3223,6 @@ MODULE_PARM_DESC(des_addr, "max9296 deserializer i2c address, "
 
 static int ds5_i2c_addr_setting(struct i2c_client *c, struct ds5 *state)
 {
-	int ret = 0;
 	int i = 0;
 	int c_addr_save = c->addr;
 	int c_bus = c->adapter->nr;
@@ -5166,7 +5168,7 @@ static const struct attribute_group ds5_attr_group = {
 #define NR_DESER 4
 
 
-#ifdef D4XX_SERDES_IPU
+#ifndef CONFIG_VIDEO_D4XX_SERDES
 #define RESET_LINK	(0x1 << 6)
 #define RESET_ONESHOT	(0x1 << 5)
 #define AUTO_LINK	(0x1 << 4)
@@ -5321,7 +5323,7 @@ static int ds5_probe(struct i2c_client *c, const struct i2c_device_id *id)
 		goto e_regulator;
 #endif
 
-#ifdef D4XX_SERDES_IPU
+#ifndef CONFIG_VIDEO_D4XX_SERDES
 	if (c->addr == 0x48)
 		c->addr = 0x12;
 	if (c->addr == 0x4a)
