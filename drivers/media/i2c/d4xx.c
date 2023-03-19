@@ -16,6 +16,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 #include <linux/delay.h>
 #include <linux/gpio.h>
 #include <linux/i2c.h>
@@ -30,19 +31,13 @@
 #include <linux/videodev2.h>
 #include <linux/version.h>
 
-#ifdef CONFIG_VIDEO_INTEL_IPU6
 #include <linux/ipu-isys.h>
-#else
-#define V4L2_CID_IPU_BASE	(V4L2_CID_USER_BASE + 0x1080)
-#define V4L2_CID_IPU_QUERY_SUB_STREAM	(V4L2_CID_IPU_BASE + 4)
-#define V4L2_CID_IPU_SET_SUB_STREAM	(V4L2_CID_IPU_BASE + 5)
-#endif
+
 #include <media/media-entity.h>
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-device.h>
 #include <media/v4l2-subdev.h>
 #include <media/v4l2-mediabus.h>
-//#include <media/d4xx.h>
 #include <media/d4xx_pdata.h>
 #ifdef CONFIG_VIDEO_D4XX_SERDES
 #include <media/max9295.h>
@@ -52,6 +47,7 @@
 #define GMSL_CSI_DT_YUV422_8 0x1E
 #define GMSL_CSI_DT_RGB_888 0x24
 #define GMSL_CSI_DT_RAW_8 0x2A
+#define GMSL_CSI_DT_EMBED 0x12
 #endif
 
 //#define DS5_DRIVER_NAME "DS5 RealSense camera driver"
@@ -1879,6 +1875,8 @@ static int ds5_set_calibration_data(struct ds5 *state,
 	return -EINVAL;
 }
 
+static int ds5_mux_s_stream(struct v4l2_subdev *sd, int on);
+
 static int ds5_s_state(struct ds5 *state, int vc)
 {
 	int ret = 0;
@@ -2242,7 +2240,7 @@ static int ds5_s_ctrl(struct v4l2_ctrl *ctrl)
 			ret = ds5_s_state(state, vc_id);
 		}
 #ifndef CONFIG_VIDEO_D4XX_SERDES
-		ret = ds5_mux_s_stream(state, on);
+		ret = ds5_mux_s_stream(sd, on);
 #endif
 		ret = 0;
 		break;
@@ -2545,7 +2543,7 @@ static int ds5_g_volatile_ctrl(struct v4l2_ctrl *ctrl)
 		if (state->is_depth)
 			ds5_read(state, base | DS5_PWM_FREQUENCY, ctrl->p_new.p_u16);
 		break;
-	case V4L2_CID_IPU_QUERY_SUB_STREAM:
+	case V4L2_CID_IPU_QUERY_SUB_STREAM: {
 		if (sensor) {
 			int vc_id = get_sub_stream_vc_id(pad_to_substream[sensor->mux_pad]);
 
@@ -2554,9 +2552,10 @@ static int ds5_g_volatile_ctrl(struct v4l2_ctrl *ctrl)
 				__func__, sensor->mux_pad, vc_id);
 			*ctrl->p_new.p_s32 = pad_to_substream[sensor->mux_pad];
 			state->mux.last_set = sensor;
-		} else {
-			/* we are in DS5 MUX case */
-			*ctrl->p_new.p_s32 = -1;
+			} else {
+				/* we are in DS5 MUX case */
+				*ctrl->p_new.p_s32 = -1;
+			}
 		}
 		break;
 	}
@@ -4164,15 +4163,7 @@ static int ds5_mux_get_frame_desc(struct v4l2_subdev *sd,
 	}
 	return 0;
 }
-static int ds5_mux_link_validate(struct v4l2_subdev *sd, struct media_link *link,
-			     struct v4l2_subdev_format *source_fmt,
-			     struct v4l2_subdev_format *sink_fmt)
-{
-	struct ds5 *state = container_of(sd, struct ds5, mux.sd.subdev);
-printk("DIMAYYY: ds5_mux_link_validate state: %s, sd: %s\n",
-ds5_get_sensor_name(state),sd->name);
-return 0;
-}
+
 static const struct v4l2_subdev_pad_ops ds5_mux_pad_ops = {
 	.enum_mbus_code		= ds5_mux_enum_mbus_code,
 	.enum_frame_size	= ds5_mux_enum_frame_size,
@@ -4180,7 +4171,6 @@ static const struct v4l2_subdev_pad_ops ds5_mux_pad_ops = {
 	.get_fmt		= ds5_mux_get_fmt,
 	.set_fmt		= ds5_mux_set_fmt,
 	.get_frame_desc		= ds5_mux_get_frame_desc,
-	.link_validate = ds5_mux_link_validate,
 };
 
 static const struct v4l2_subdev_core_ops ds5_mux_core_ops = {
@@ -5167,8 +5157,21 @@ static const struct attribute_group ds5_attr_group = {
 
 #define NR_DESER 4
 
-
 #ifndef CONFIG_VIDEO_D4XX_SERDES
+static const struct regmap_config ds5_regmap_max9296 = {
+	.reg_bits = 16,
+	.val_bits = 8,
+	.reg_format_endian = REGMAP_ENDIAN_BIG,
+	.val_format_endian = REGMAP_ENDIAN_NATIVE,
+};
+
+static const struct regmap_config ds5_regmap_max9295 = {
+	.reg_bits = 16,
+	.val_bits = 8,
+	.reg_format_endian = REGMAP_ENDIAN_BIG,
+	.val_format_endian = REGMAP_ENDIAN_NATIVE,
+};
+
 #define RESET_LINK	(0x1 << 6)
 #define RESET_ONESHOT	(0x1 << 5)
 #define AUTO_LINK	(0x1 << 4)
@@ -5250,7 +5253,6 @@ static int ds5_i2c_addr_setting(struct i2c_client *c, struct ds5 *state)
 	return 0;
 }
 #endif
-// #include <media/ipu-acpi-pdata.h>
 
 static int ds5_probe(struct i2c_client *c, const struct i2c_device_id *id)
 {
@@ -5262,31 +5264,7 @@ static int ds5_probe(struct i2c_client *c, const struct i2c_device_id *id)
 #endif
 	if (!state)
 		return -ENOMEM;
-#if 0
-	struct device *dev = &c->dev;
-	struct d4xx_pdata *pdata = dev->platform_data;
-	printk("sizeof d4xx_subdev_info: %d\n", sizeof(struct d4xx_subdev_info));
-	printk("sizeof d4xx_pdata: %d\n", sizeof(struct d4xx_pdata));
-	printk("sizeof i2c_board_info: %d\n", sizeof(struct i2c_board_info));
-	printk("pdata->subdev_num: %d\n", pdata->subdev_num);
 
-	printk("pdata->suffix: %c\n", pdata->suffix);
-	printk("pdata->deser_board_info->addr: 0x%x\n", pdata->deser_board_info->addr); //48
-	printk("pdata->deser_board_info->platform_data: %p\n", pdata->deser_board_info->platform_data); //48
-	printk("pdata->deser_board_info->type: %s\n", pdata->deser_board_info->type); //48
-
-	printk("pdata->subdev_info[0].suffix: %c\n", pdata->subdev_info[0].suffix);
-	printk("pdata->subdev_info[0].phy_i2c_addr: 0x%x\n", pdata->subdev_info[0].phy_i2c_addr);
-	printk("pdata->subdev_info[0].rx_port: %d\n", pdata->subdev_info[0].rx_port);
-	printk("pdata->subdev_info[0].ser_alias: 0x%x\n", pdata->subdev_info[0].ser_alias); //42
-	printk("pdata->subdev_info[0].i2c_adapter_id: 0x%x\n", pdata->subdev_info[0].i2c_adapter_id);
-
-	printk("pdata->subdev_info[0].board_info.addr: 0x%x\n", pdata->subdev_info[0].board_info.addr);
-	printk("pdata: %p\n", pdata);
-
-	printk("pdata->subdev_info[0].board_info.platform_data: %p\n", pdata->subdev_info[0].board_info.platform_data);
-	printk("pdata->subdev_info[0].board_info.type: %s\n", pdata->subdev_info[0].board_info.type);
-#endif
 	mutex_init(&state->lock);
 
 	dev_warn(&c->dev, "Driver addr 0x%x\n", c->addr);
@@ -5345,7 +5323,7 @@ static int ds5_probe(struct i2c_client *c, const struct i2c_device_id *id)
 	// Verify communication
 	retry = 10;
 	do {
-		ret = ds5_read(state, 0x5020, &rec_state);
+	ret = ds5_read(state, 0x5020, &rec_state);
 	} while (retry-- && ret < 0);
 	if (ret < 0) {
 		dev_err(&c->dev,
@@ -5511,7 +5489,6 @@ static struct i2c_driver ds5_i2c_driver = {
 };
 
 module_i2c_driver(ds5_i2c_driver);
-MODULE_SOFTDEP("pre: intel_ipu6_isys");
 
 MODULE_DESCRIPTION("Intel RealSense D4XX Camera Driver");
 MODULE_AUTHOR("Guennadi Liakhovetski <guennadi.liakhovetski@intel.com>,\n\
