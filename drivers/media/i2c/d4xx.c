@@ -3981,7 +3981,9 @@ static int ds5_mux_s_stream(struct v4l2_subdev *sd, int on)
 	unsigned int i = 0;
 	int restore_val = 0;
 	u16 config_status_base, stream_status_base, stream_id, vc_id;
-
+	// spare duplicate calls
+	if (state->mux.last_set->streaming == on)
+		return 0;
 	if (state->is_depth) {
 		config_status_base = DS5_DEPTH_CONFIG_STATUS;
 		stream_status_base = DS5_DEPTH_STREAM_STATUS;
@@ -4059,7 +4061,7 @@ static int ds5_mux_s_stream(struct v4l2_subdev *sd, int on)
 			dev_dbg(&state->client->dev, "started after %dms\n",
 				i * DS5_START_POLL_TIME);
 		}
-	} else {
+	} else { // off
 		ret = ds5_write(state, DS5_START_STOP_STREAM,
 				DS5_STREAM_STOP | stream_id);
 		if (ret < 0)
@@ -4072,9 +4074,33 @@ static int ds5_mux_s_stream(struct v4l2_subdev *sd, int on)
 			GMSL_CSI_DT_RGB_888) {
 			max9296_reset_oneshot(state->dser_dev);
 		}
+#ifndef CONFIG_TEGRA_CAMERA_PLATFORM
+		max9296_reset_oneshot(state->dser_dev);
+#endif
 		if (max9296_release_pipe(state->dser_dev, state->pipe_id) < 0)
 			dev_warn(&state->client->dev, "release pipe failed\n");
 		state->pipe_id = -1;
+#else
+{
+	int s_addr = state->client->addr;
+	int n_addr;
+	if (s_addr == 0x12)
+		n_addr = 0x48;
+	if (s_addr == 0x14)
+		n_addr = 0x4a;
+	if (s_addr == 0x16)
+		n_addr = 0x68;
+	if (s_addr == 0x18)
+		n_addr = 0x6c;
+	if (n_addr) {
+		state->client->addr = n_addr;
+		dev_warn(&state->client->dev, "One-shot reset 0x%x enable auto-link\n", n_addr);
+		max9296_write_8(state, 0x0010, 0x31); // One-shot reset  enable auto-link
+		state->client->addr = s_addr;
+		/* delay to settle link */
+		msleep(100);
+	}
+}
 #endif
 	}
 
