@@ -145,6 +145,8 @@ enum ipu_isys_enum_link_state {
 	IPU_ISYS_LINK_STATE_DISABLED = 0,
 	IPU_ISYS_LINK_STATE_ENABLED = 1,
 	IPU_ISYS_LINK_STATE_DONE = 2,
+	IPU_ISYS_LINK_STATE_MD = 3,
+	IPU_ISYS_LINK_STATE_MAX,
 };
 
 static int ipu_isys_query_sensor_info(struct media_pad *source_pad,
@@ -1953,30 +1955,28 @@ static int media_pipeline_update_fmt(struct ipu_isys_video *av)
 	struct media_pad *source_pad = media_entity_remote_pad(&av->pad);
 	struct media_pad *remote_pad = source_pad;
 	struct v4l2_subdev *sd = NULL;
+	int ret = 0;
+	struct v4l2_subdev_format fmt = {
+		.which = V4L2_SUBDEV_FORMAT_ACTIVE,
+		.pad = 0,
+	};
+	struct v4l2_mbus_framefmt format = {
+		.width = av->mpix.width,
+		.height = av->mpix.height,
+		.code = av->pfmt->code,
+		.field = av->mpix.field,
+		.colorspace = av->mpix.colorspace,
+		.ycbcr_enc = av->mpix.ycbcr_enc,
+		.quantization = av->mpix.quantization,
+		.xfer_func = av->mpix.xfer_func,
+	};
 
 	if (av->aq.vbq.streaming)
 		return -EBUSY;
-	// this conflicts with metadata nodes.
-	// if (av->enum_link_state == IPU_ISYS_LINK_STATE_DONE)
-	{
-		int ret = 0;
-		struct v4l2_subdev_format fmt = {
-			.which = V4L2_SUBDEV_FORMAT_ACTIVE,
-			.pad = 0,
-		};
-		struct v4l2_mbus_framefmt format = {
-			.width = av->mpix.width,
-			.height = av->mpix.height,
-			.code = av->pfmt->code,
-			.field = av->mpix.field,
-			.colorspace = av->mpix.colorspace,
-			.ycbcr_enc = av->mpix.ycbcr_enc,
-			.quantization = av->mpix.quantization,
-			.xfer_func = av->mpix.xfer_func,
-		};
-		fmt.format = format;
-		
-		/* set format for CSI-2 and CSI2 BE SOC  */
+
+	fmt.format = format;
+
+	/* set format for CSI-2 and CSI2 BE SOC  */
 	do {
 		/* Non-subdev nodes can be safely ignored here. */
 		if (!is_media_entity_v4l2_subdev(remote_pad->entity))
@@ -2021,7 +2021,7 @@ static int media_pipeline_update_fmt(struct ipu_isys_video *av)
 			return -EINVAL;
 	} while ((remote_pad =
 			media_entity_remote_pad(&remote_pad->entity->pads[0])));
-	}
+
 	return 0;
 }
 
@@ -2069,7 +2069,9 @@ static int media_pipeline_walk_by_vc(struct ipu_isys_video *av,
 	* and source pads have single link point while BE-SOC sink 
 	* and external entities has multiple source pads.
 	*/
-	media_pipeline_update_fmt(av);
+	if (av->enum_link_state == IPU_ISYS_LINK_STATE_DONE || \
+		av->enum_link_state == IPU_ISYS_LINK_STATE_MD)
+		media_pipeline_update_fmt(av);
 
 	media_graph_walk_start(&pipe->graph, entity);
 	while ((entity = media_graph_walk_next(graph))) {
@@ -2398,7 +2400,9 @@ int ipu_isys_video_set_streaming(struct ipu_isys_video *av,
 				 esd->v4l2_dev->mdev,
 				 &cs);
 #endif
-		rval = v4l2_subdev_call(esd, video, s_stream, state);
+		if (av->enum_link_state == IPU_ISYS_LINK_STATE_DONE || \
+			av->enum_link_state == IPU_ISYS_LINK_STATE_MD)
+			rval = v4l2_subdev_call(esd, video, s_stream, state);
 	}
 
 	mutex_lock(&mdev->graph_mutex);
@@ -2467,7 +2471,9 @@ int ipu_isys_video_set_streaming(struct ipu_isys_video *av,
 #endif
 		if (rval)
 			goto out_media_entity_stop_streaming_firmware;
-		rval = v4l2_subdev_call(esd, video, s_stream, state);
+		if (av->enum_link_state == IPU_ISYS_LINK_STATE_DONE || \
+			av->enum_link_state == IPU_ISYS_LINK_STATE_MD)
+			rval = v4l2_subdev_call(esd, video, s_stream, state);
 	} else {
 		close_streaming_firmware(av);
 		av->ip.vc = INVALIA_VC_ID;
@@ -2588,7 +2594,7 @@ static int ipu_isys_video_s_ctrl(struct v4l2_ctrl *ctrl)
 
 	switch (ctrl->id) {
 		case V4L2_CID_IPU_ENUMERATE_LINK:
-		av->enum_link_state = !!(ctrl->val);
+		av->enum_link_state = ctrl->val;
 		break;
 	}
 
@@ -2604,9 +2610,9 @@ static const struct v4l2_ctrl_config ipu_isys_video_enum_link = {
 	.ops = &ipu_isys_video_ctrl_ops,
 	.id = V4L2_CID_IPU_ENUMERATE_LINK,
 	.name = "Enumerate graph link",
-	.type = V4L2_CTRL_TYPE_BOOLEAN,
+	.type = V4L2_CTRL_TYPE_INTEGER,
 	.min = 0,
-	.max = 1,
+	.max = IPU_ISYS_LINK_STATE_MAX,
 	.step = 1,
 	.def = 0,
 };
