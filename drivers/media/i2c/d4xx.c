@@ -978,7 +978,12 @@ static const struct ds5_format ds5_y_formats_ds5u[] = {
 		.mbus_code = MEDIA_BUS_FMT_RGB888_1X24,	/* FIXME */
 		.n_resolutions = ARRAY_SIZE(d43x_calibration_sizes),
 		.resolutions = d43x_calibration_sizes,
-	},
+	}, {
+		.data_type = GMSL_CSI_DT_YUV422_8,	/* Y8I generic */
+		.mbus_code = MEDIA_BUS_FMT_UYVY8_1X16,
+		.n_resolutions = ARRAY_SIZE(y8_sizes),
+		.resolutions = y8_sizes,
+	}
 };
 
 static const struct ds5_format ds5_rlt_rgb_format = {
@@ -2227,18 +2232,15 @@ static int ds5_s_ctrl(struct v4l2_ctrl *ctrl)
 		dev_info(&state->client->dev, "V4L2_CID_IPU_SET_SUB_STREAM %x\n", val);
 		vc_id = (val >> 8) & 0x00FF;
 		on = val & 0x00FF;
-		if (on == 0xff) {
+		if (vc_id < DS5_MUX_PAD_COUNT)
 			ret = ds5_s_state(state, vc_id);
+		if (on == 0xff) {
 			break;
 		}
 		if (vc_id > NR_OF_DS5_STREAMS - 1)
 			dev_err(&state->client->dev, "invalid vc %d\n", vc_id);
 		else
 			d4xx_set_sub_stream[vc_id] = on;
-
-		if (on == 0) {
-			ret = ds5_s_state(state, vc_id);
-		}
 #ifndef CONFIG_VIDEO_D4XX_SERDES
 		ret = ds5_mux_s_stream(sd, on);
 #endif
@@ -3827,7 +3829,9 @@ static int ds5_mux_set_fmt(struct v4l2_subdev *sd,
 	// u32 pad = fmt->pad;
 	int ret = 0;
 	int substream = -1;
-
+	if (pad != DS5_MUX_PAD_EXTERNAL)
+		ds5_s_state(state, pad - 1);
+	sensor = state->mux.last_set;
 	switch (pad) {
 	case DS5_MUX_PAD_DEPTH_A:
 	case DS5_MUX_PAD_MOTION_T_A:
@@ -3884,7 +3888,9 @@ static int ds5_mux_get_fmt(struct v4l2_subdev *sd,
 	int ret = 0;
 	struct ds5_sensor *sensor = state->mux.last_set;
 	u32 pad = sensor->mux_pad;
-
+	if (pad != DS5_MUX_PAD_EXTERNAL)
+		ds5_s_state(state, pad - 1);
+	sensor = state->mux.last_set;
 	dev_info(sd->dev, "%s(): %u %s %p\n", __func__, pad, ds5_get_sensor_name(state), state->mux.last_set);
 
 	switch (pad) {
