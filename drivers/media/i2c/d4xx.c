@@ -3523,7 +3523,7 @@ static int ds5_sensor_init(struct i2c_client *c, struct ds5 *state,
 	/*
 	 * TODO: suffix for 2 D457 connected to 1 Deser
 	 */
-	snprintf(sd->name, sizeof(sd->name), "D4XX %s %c", name, dpdata->subdev_info[0].suffix);
+	snprintf(sd->name, sizeof(sd->name), "D4XX %s %c", name, dpdata->suffix);
 
 	sd->flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
 
