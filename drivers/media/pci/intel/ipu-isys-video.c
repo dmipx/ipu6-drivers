@@ -184,6 +184,7 @@ static int media_pipeline_enumerate_by_vc_cb(
 
 	if (!source_pad) {
 		dev_err(entity->graph_obj.mdev->dev, "no remote pad found\n");
+		kfree(ip);
 		return ret;
 	}
 
