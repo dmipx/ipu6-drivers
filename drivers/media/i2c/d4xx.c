@@ -394,6 +394,7 @@ struct ds5_sensor {
 	/*struct ds5_vchan *vchan;*/
 	const struct ds5_format *formats;
 	unsigned int n_formats;
+	int pipe_id;
 };
 
 struct ds5_des {
@@ -485,7 +486,6 @@ struct ds5 {
 	struct device *dser_dev;
 	struct i2c_client *ser_i2c;
 	struct i2c_client *dser_i2c;
-	int pipe_id;
 #endif
 };
 
@@ -1484,7 +1484,7 @@ static int ds5_configure(struct ds5 *state)
 	// usable for multiple sensors on one des, need to configure vc in pdata
 	// vc_id = state->g_ctx.dst_vc;
 
-	ret = ds5_setup_pipeline(state, data_type1, data_type2, state->pipe_id,
+	ret = ds5_setup_pipeline(state, data_type1, data_type2, sensor->pipe_id,
 				 vc_id);
 	// reset data path when switching to Y12I
 	if (state->is_y8 && data_type1 == GMSL_CSI_DT_RGB_888)
@@ -1749,7 +1749,14 @@ static int ds5_send_hwmc(struct ds5 *state, u16 cmdLen, struct hwm_cmd *cmd,
 			"param1: %d, param2: %d, param3: %d, param4: %d\n",
 			__func__, cmd->header, cmd->magic_word, cmd->opcode,
 			cmd->param1, cmd->param2, cmd->param3, cmd->param4);
-
+if(cmd->opcode == 0x7d) {
+			dev_warn(&state->client->dev,
+			"%s(): SKIP ISSUE HWMC header: 0x%x, magic: 0x%x, opcode: 0x%x, "
+			"param1: %d, param2: %d, param3: %d, param4: %d\n",
+			__func__, cmd->header, cmd->magic_word, cmd->opcode,
+			cmd->param1, cmd->param2, cmd->param3, cmd->param4);
+return 0;
+}
 	ds5_raw_write_with_check(state, 0x4900, cmd, cmdLen);
 
 	ds5_write_with_check(state, 0x490C, 0x01); /* execute cmd */
@@ -1764,6 +1771,11 @@ static int ds5_send_hwmc(struct ds5 *state, u16 cmdLen, struct hwm_cmd *cmd,
 		dev_err(&state->client->dev,
 				"%s(): HWMC failed, ret: %d, status: %x, error code: %d\n",
 				__func__, ret, status, errorCode);
+		dev_warn(&state->client->dev,
+			"%s(): HWMC header: 0x%x, magic: 0x%x, opcode: 0x%x, "
+			"param1: %d, param2: %d, param3: %d, param4: %d\n",
+			__func__, cmd->header, cmd->magic_word, cmd->opcode,
+			cmd->param1, cmd->param2, cmd->param3, cmd->param4);
 		ret = -EAGAIN;
 	}
 
@@ -3981,8 +3993,10 @@ static int ds5_mux_s_stream(struct v4l2_subdev *sd, int on)
 	unsigned int i = 0;
 	int restore_val = 0;
 	u16 config_status_base, stream_status_base, stream_id, vc_id;
+	struct ds5_sensor *sensor = state->mux.last_set;
+
 	// spare duplicate calls
-	if (state->mux.last_set->streaming == on)
+	if (sensor->streaming == on)
 		return 0;
 	if (state->is_depth) {
 		config_status_base = DS5_DEPTH_CONFIG_STATUS;
@@ -4008,23 +4022,23 @@ static int ds5_mux_s_stream(struct v4l2_subdev *sd, int on)
 		return -EINVAL;
 	}
 
-	dev_warn(&state->client->dev, "s_stream for stream %s, on = %d\n",
-			state->mux.last_set->sd.name, on);
+	dev_warn(&state->client->dev, "s_stream for stream %s, vc:%d, SENSOR=%s on = %d\n",
+			sensor->sd.name, vc_id, ds5_get_sensor_name(state), on);
 
-	restore_val = state->mux.last_set->streaming;
-	state->mux.last_set->streaming = on;
+	restore_val = sensor->streaming;
+	sensor->streaming = on;
 
 	if (on) {
 #ifdef CONFIG_VIDEO_D4XX_SERDES
 		// set manually, need to configure vc in pdata
 		state->g_ctx.dst_vc = vc_id;
-		state->pipe_id =
+		sensor->pipe_id =
 			max9296_get_available_pipe_id(state->dser_dev,
 						      (int)state->g_ctx.dst_vc);
-		if (state->pipe_id < 0) {
+		if (sensor->pipe_id < 0) {
 			dev_err(&state->client->dev,
 				"No free pipe in max9296\n");
-			ret = state->pipe_id;
+			ret = sensor->pipe_id;
 			goto restore_s_state;
 		}
 #endif
@@ -4075,13 +4089,14 @@ static int ds5_mux_s_stream(struct v4l2_subdev *sd, int on)
 			max9296_reset_oneshot(state->dser_dev);
 		}
 #ifndef CONFIG_TEGRA_CAMERA_PLATFORM
+		// reset for IPU6
 		max9296_reset_oneshot(state->dser_dev);
 #endif
-		if (max9296_release_pipe(state->dser_dev, state->pipe_id) < 0)
+		if (max9296_release_pipe(state->dser_dev, sensor->pipe_id) < 0)
 			dev_warn(&state->client->dev, "release pipe failed\n");
-		state->pipe_id = -1;
+		sensor->pipe_id = -1;
 #else
-{
+{ // ipu6 yavta compatibility
 	int s_addr = state->client->addr;
 	int n_addr;
 	if (s_addr == 0x12)
@@ -4107,20 +4122,20 @@ static int ds5_mux_s_stream(struct v4l2_subdev *sd, int on)
 	ds5_read(state, config_status_base, &status);
 	ds5_read(state, stream_status_base, &streaming);
 	dev_info(&state->client->dev,
-			"%s %s, stream_status 0x%x:%x, config_status 0x%x:%x\n",
+			"%s %s, stream_status 0x%x:%x, config_status 0x%x:%x ret=%d\n",
 			ds5_get_sensor_name(state),
 			(on)?"START":"STOP",
 			stream_status_base, streaming,
-			config_status_base, status);
+			config_status_base, status, ret);
 
 	return ret;
 
 restore_s_state:
 #ifdef CONFIG_VIDEO_D4XX_SERDES
-	if (on && state->pipe_id >= 0) {
-		if (max9296_release_pipe(state->dser_dev, state->pipe_id) < 0)
+	if (on && sensor->pipe_id >= 0) {
+		if (max9296_release_pipe(state->dser_dev, sensor->pipe_id) < 0)
 			dev_warn(&state->client->dev, "release pipe failed\n");
-		state->pipe_id = -1;
+		sensor->pipe_id = -1;
 	}
 #endif
 
@@ -4129,7 +4144,7 @@ restore_s_state:
 			"%s stream toggle failed! %x status 0x%04x\n",
 			ds5_get_sensor_name(state) ,restore_val, status);
 
-	state->mux.last_set->streaming = restore_val;
+	sensor->streaming = restore_val;
 
 	return ret;
 }
