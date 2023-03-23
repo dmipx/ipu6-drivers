@@ -978,12 +978,7 @@ static const struct ds5_format ds5_y_formats_ds5u[] = {
 		.mbus_code = MEDIA_BUS_FMT_RGB888_1X24,	/* FIXME */
 		.n_resolutions = ARRAY_SIZE(d43x_calibration_sizes),
 		.resolutions = d43x_calibration_sizes,
-	}, {
-		.data_type = GMSL_CSI_DT_YUV422_8,	/* Y8I generic */
-		.mbus_code = MEDIA_BUS_FMT_UYVY8_1X16,
-		.n_resolutions = ARRAY_SIZE(y8_sizes),
-		.resolutions = y8_sizes,
-	}
+	},
 };
 
 static const struct ds5_format ds5_rlt_rgb_format = {
@@ -4090,7 +4085,13 @@ static int ds5_mux_s_stream(struct v4l2_subdev *sd, int on)
 		}
 #ifndef CONFIG_TEGRA_CAMERA_PLATFORM
 		// reset for IPU6
-		max9296_reset_oneshot(state->dser_dev);
+		if (!(state->depth.sensor.streaming || \
+			state->rgb.sensor.streaming || \
+			state->motion_t.sensor.streaming || \
+			state->imu.sensor.streaming)) {
+				dev_warn(&state->client->dev, "max9296_reset_oneshot\n");
+				max9296_reset_oneshot(state->dser_dev);
+		}
 #endif
 		if (max9296_release_pipe(state->dser_dev, sensor->pipe_id) < 0)
 			dev_warn(&state->client->dev, "release pipe failed\n");
