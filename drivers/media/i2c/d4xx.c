@@ -4975,11 +4975,12 @@ static int ds5_chrdev_init(struct i2c_client *c, struct ds5 *state)
 	if (ret < 0)
 		return ret;
 
-	if (!atomic_cmpxchg(&primary_chardev, 0, MAJOR(*dev_num))) {
+	if (!atomic_read(&primary_chardev)) {
 		dev_dbg(&c->dev, "%s(): <Major, Minor>: <%d, %d>\n",
 				__func__, MAJOR(*dev_num), MINOR(*dev_num));
 		/* Create a class : appears at /sys/class */
 		*ds5_class = class_create(THIS_MODULE, DS5_DRIVER_NAME_CLASS);
+		dev_warn(&state->client->dev, "%s() class_create\n", __func__);
 		if (IS_ERR(*ds5_class)) {
 			dev_err(&c->dev, "Could not create class device\n");
 			unregister_chrdev_region(0, 1);
@@ -5005,6 +5006,7 @@ static int ds5_chrdev_init(struct i2c_client *c, struct ds5 *state)
 		return ret;
 	}
 	cdev_add(ds5_cdev, *dev_num, 1);
+	atomic_inc(&primary_chardev);
 	return 0;
 };
 
@@ -5018,8 +5020,10 @@ static int ds5_chrdev_remove(struct ds5 *state)
 	dev_dbg(&state->client->dev, "%s()\n", __func__);
 	unregister_chrdev_region(*dev_num, 1);
 	device_destroy(*ds5_class, *dev_num);
-	if (atomic_cmpxchg(&primary_chardev, MAJOR(*dev_num), 0) == MAJOR(*dev_num))
+	if (atomic_dec_and_test(&primary_chardev)) {
+		dev_warn(&state->client->dev, "%s() class_destroy\n", __func__);
 		class_destroy(*ds5_class);
+	}
 	return 0;
 }
 
@@ -5369,7 +5373,7 @@ static int ds5_probe(struct i2c_client *c, const struct i2c_device_id *id)
 #endif
 
 	// Verify communication
-	retry = 10;
+	retry = 5;
 	do {
 	ret = ds5_read(state, 0x5020, &rec_state);
 	} while (retry-- && ret < 0);
@@ -5457,6 +5461,10 @@ e_chardev:
 e_regulator:
 	if (state->vcc)
 		regulator_disable(state->vcc);
+	if (state->ser_i2c)
+		i2c_unregister_device(state->ser_i2c);
+	if (state->dser_i2c)
+		i2c_unregister_device(state->dser_i2c);
 	return ret;
 }
 
@@ -5505,16 +5513,17 @@ static int ds5_remove(struct i2c_client *c)
 	if (state->vcc)
 		regulator_disable(state->vcc);
 //	gpio_free(state->pwdn_gpio);
-	if (state->is_depth) {
-		ds5_chrdev_remove(state);
-	}
 
 	if (state->dfu_dev.dfu_state_flag != DS5_DFU_RECOVERY) {
 #ifdef CONFIG_SYSFS
 		sysfs_remove_group(&c->dev.kobj, &ds5_attr_group);
 #endif
 		ds5_mux_remove(state);
+		if (state->is_depth) {
+			ds5_chrdev_remove(state);
+		}
 	}
+
 	return 0;
 }
 
