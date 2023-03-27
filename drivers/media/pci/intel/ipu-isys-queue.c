@@ -911,8 +911,8 @@ static int isys_fw_open(struct ipu_isys_video *av)
 
 	if (isys->reset_needed || isp->flr_done) {
 		mutex_unlock(&isys->mutex);
-		dev_warn(&isys->adev->dev, "%s:%d %s: isys power cycle required\n", 
-		__func__, __LINE__, av->vdev.name);
+		dev_warn(&isys->adev->dev, "%s:%d %s: isys power cycle required\n",
+			__func__, __LINE__, av->vdev.name);
 		return -EIO;
 	}
 	mutex_unlock(&isys->mutex);
