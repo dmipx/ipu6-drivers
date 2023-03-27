@@ -28,7 +28,6 @@
 #include "ipu-bus.h"
 #include "ipu-cpd.h"
 #include "ipu-isys.h"
-#include "ipu-buttress.h"
 #include "ipu-isys-video.h"
 #include "ipu-platform.h"
 #include "ipu-platform-regs.h"
@@ -632,6 +631,7 @@ int ipu_isys_vidioc_enum_fmt(struct file *file, void *fh,
 	u32 index;
 	int ret;
 	struct v4l2_subdev_mbus_code_enum mce;
+
 	if (!pad || !pad->entity)
 		return -EINVAL;
 	sd = media_entity_to_v4l2_subdev(pad->entity);
@@ -678,6 +678,7 @@ int ipu_isys_vidioc_enum_fmt(struct file *file, void *fh,
 		}
 	        f->mbus_code = pfmt->code;
 	}
+
 	f->pixelformat = pfmt->pixelformat;
 
 	return 0;
@@ -984,14 +985,16 @@ static bool is_external(struct ipu_isys_video *av, struct media_entity *entity)
 static int link_validate(struct media_link *link)
 {
 	struct ipu_isys_video *av =
-	    container_of(link->sink, struct ipu_isys_video, pad);
+		container_of(link->sink, struct ipu_isys_video, pad);
 	/* All sub-devices connected to a video node are ours. */
 	struct ipu_isys_pipeline *ip =
-		to_ipu_isys_pipeline(av->vdev.entity.pipe);
+		to_ipu_isys_pipeline(media_entity_pipeline(&av->vdev.entity));
 	struct v4l2_subdev *sd;
 
+	WARN_ON(!ip);
 	if (!link->source->entity)
 		return -EINVAL;
+
 	sd = media_entity_to_v4l2_subdev(link->source->entity);
 	if (is_external(av, link->source->entity)) {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0)
@@ -1030,7 +1033,7 @@ static void put_stream_opened(struct ipu_isys_video *av)
 static int get_stream_handle(struct ipu_isys_video *av)
 {
 	struct ipu_isys_pipeline *ip =
-	    to_ipu_isys_pipeline(av->vdev.entity.pipe);
+		to_ipu_isys_pipeline(media_entity_pipeline(&av->vdev.entity));
 	unsigned int stream_handle;
 	unsigned long flags;
 
@@ -1052,7 +1055,7 @@ static int get_stream_handle(struct ipu_isys_video *av)
 static void put_stream_handle(struct ipu_isys_video *av)
 {
 	struct ipu_isys_pipeline *ip =
-	    to_ipu_isys_pipeline(av->vdev.entity.pipe);
+		to_ipu_isys_pipeline(media_entity_pipeline(&av->vdev.entity));
 	unsigned long flags;
 
 	spin_lock_irqsave(&av->isys->lock, flags);
@@ -1268,7 +1271,7 @@ ipu_isys_prepare_fw_cfg_default(struct ipu_isys_video *av,
 				struct ipu_fw_isys_stream_cfg_data_abi *cfg)
 {
 	struct ipu_isys_pipeline *ip =
-	    to_ipu_isys_pipeline(av->vdev.entity.pipe);
+		to_ipu_isys_pipeline(media_entity_pipeline(&av->vdev.entity));
 	struct ipu_isys_queue *aq = &av->aq;
 	struct ipu_fw_isys_output_pin_info_abi *pin_info;
 	struct ipu_isys *isys = av->isys;
@@ -1468,7 +1471,7 @@ static int start_stream_firmware(struct ipu_isys_video *av,
 				 struct ipu_isys_buffer_list *bl)
 {
 	struct ipu_isys_pipeline *ip =
-	    to_ipu_isys_pipeline(av->vdev.entity.pipe);
+		to_ipu_isys_pipeline(media_entity_pipeline(&av->vdev.entity));
 	struct device *dev = &av->isys->adev->dev;
 	struct v4l2_subdev_selection sel_fmt = {
 		.which = V4L2_SUBDEV_FORMAT_ACTIVE,
@@ -1694,7 +1697,7 @@ out_put_stream_handle:
 static void stop_streaming_firmware(struct ipu_isys_video *av)
 {
 	struct ipu_isys_pipeline *ip =
-	    to_ipu_isys_pipeline(av->vdev.entity.pipe);
+		to_ipu_isys_pipeline(media_entity_pipeline(&av->vdev.entity));
 	struct device *dev = &av->isys->adev->dev;
 	int rval, tout;
 	enum ipu_fw_isys_send_type send_type =
@@ -1723,7 +1726,7 @@ static void stop_streaming_firmware(struct ipu_isys_video *av)
 static void close_streaming_firmware(struct ipu_isys_video *av)
 {
 	struct ipu_isys_pipeline *ip =
-	    to_ipu_isys_pipeline(av->vdev.entity.pipe);
+		to_ipu_isys_pipeline(media_entity_pipeline(&av->vdev.entity));
 	struct device *dev = &av->isys->adev->dev;
 	int rval, tout;
 
@@ -1956,6 +1959,10 @@ static int media_pipeline_walk_by_vc(struct ipu_isys_video *av,
 	struct media_pad *source_pad = media_pad_remote_pad_first(&av->pad);
 #endif
 	unsigned int pad_id;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 18, 0)
+	int previous_stream_count = 0;
+	struct media_entity *entity_enum = entity;
+#endif
 
 	if (!source_pad) {
 		dev_err(entity->graph_obj.mdev->dev, "no remote pad found\n");
@@ -1985,6 +1992,14 @@ static int media_pipeline_walk_by_vc(struct ipu_isys_video *av,
 		av->enum_link_state == IPU_ISYS_LINK_STATE_MD)
 		media_pipeline_update_fmt(av);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 18, 0)
+	media_graph_walk_start(&pipe->graph, entity_enum);
+	while ((entity_enum = media_graph_walk_next(graph))) {
+		if (entity_enum->stream_count > previous_stream_count)
+			previous_stream_count = entity_enum->stream_count;
+	}
+#endif
+
 	media_graph_walk_start(&pipe->graph, entity);
 	while ((entity = media_graph_walk_next(graph))) {
 		DECLARE_BITMAP(active, MEDIA_ENTITY_MAX_PADS);
@@ -1994,7 +2009,7 @@ static int media_pipeline_walk_by_vc(struct ipu_isys_video *av,
 			entity->name);
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 18, 0)
-		entity->stream_count++;
+		entity->stream_count = previous_stream_count + 1;
 #endif
 
 		if (entity->pipe && entity->pipe == pipe) {
@@ -2161,6 +2176,7 @@ int ipu_isys_video_prepare_streaming(struct ipu_isys_video *av,
 	struct media_entity_graph graph;
 #endif
 	struct media_entity *entity;
+	struct media_pipeline *media_pipe;
 	struct media_device *mdev = &av->isys->media_dev;
 	int rval;
 	unsigned int i;
@@ -2168,12 +2184,17 @@ int ipu_isys_video_prepare_streaming(struct ipu_isys_video *av,
 	dev_dbg(dev, "prepare stream: %d\n", state);
 
 	if (!state) {
-		ip = to_ipu_isys_pipeline(av->vdev.entity.pipe);
+		media_pipe = media_entity_pipeline(&av->vdev.entity);
+		ip = to_ipu_isys_pipeline(media_pipe);
 
 		if (ip->interlaced && isys->short_packet_source ==
 		    IPU_ISYS_SHORT_PACKET_FROM_RECEIVER)
 			short_packet_queue_destroy(ip);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0)
 		media_pipeline_stop(&av->vdev.entity);
+#else
+		media_pipeline_stop(av->vdev.entity.pads);
+#endif
 		media_entity_enum_cleanup(&ip->entity_enum);
 		return 0;
 	}
@@ -2247,7 +2268,11 @@ int ipu_isys_video_prepare_streaming(struct ipu_isys_video *av,
 	return 0;
 
 out_pipeline_stop:
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0)
 	media_pipeline_stop(&av->vdev.entity);
+#else
+	media_pipeline_stop(av->vdev.entity.pads);
+#endif
 
 out_enum_cleanup:
 	media_entity_enum_cleanup(&ip->entity_enum);
@@ -2270,7 +2295,7 @@ int ipu_isys_video_set_streaming(struct ipu_isys_video *av,
 
 	struct media_entity *entity, *entity2;
 	struct ipu_isys_pipeline *ip =
-	    to_ipu_isys_pipeline(av->vdev.entity.pipe);
+		to_ipu_isys_pipeline(media_entity_pipeline(&av->vdev.entity));
 	struct v4l2_subdev *sd, *esd;
 	int rval = 0;
 	struct v4l2_ext_control c = {.id = V4L2_CID_IPU_SET_SUB_STREAM, };
