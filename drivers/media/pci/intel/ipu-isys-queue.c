@@ -823,7 +823,7 @@ static int __start_streaming(struct vb2_queue *q, unsigned int count)
 	}
 
 	mutex_unlock(&av->isys->stream_mutex);
-if (first) { // link validation fail if we restart stream triggered by fw
+if (!count) { // link validation fail if we restart stream triggered by fw
 	rval = aq->link_fmt_validate(aq);
 	if (rval) {
 		dev_err(&av->isys->adev->dev,
@@ -898,6 +898,7 @@ out_return_buffers:
 
 	return rval;
 }
+
 static int isys_fw_open(struct ipu_isys_video *av)
 {
 	struct ipu_isys *isys = av->isys;
@@ -980,10 +981,11 @@ static int start_streaming(struct vb2_queue *q, unsigned int count)
 	struct ipu_isys_queue *aq = vb2_queue_to_ipu_isys_queue(q);
 	struct ipu_isys_video *av = ipu_isys_queue_to_video(aq);
 	int rval;
-rval = isys_fw_open(av);
-if (rval < 0) {
-dev_err(&av->isys->adev->dev, "isys_fw_open failed: %d\n", rval);
-}
+	
+	rval = isys_fw_open(av);
+	if (rval < 0) {
+		dev_err(&av->isys->adev->dev, "isys_fw_open failed: %d\n", rval);
+	}
 	mutex_unlock(&av->mutex);
 	mutex_lock(&av->isys->reset_mutex);
 	while (av->isys->in_stop_streaming) {
@@ -1007,7 +1009,8 @@ static void reset_stop_streaming(struct ipu_isys_video *av)
 	struct ipu_isys_pipeline *ip = &av->ip;
 	struct ipu_isys_queue *aq = &av->aq;
 
-	dev_dbg(&av->isys->adev->dev, "%s: stop streaming\n", av->vdev.name);
+	dev_warn(&av->isys->adev->dev, "%s():%d %s: stop streaming\n",
+		__func__, __LINE__, av->vdev.name);
 
 	mutex_lock(&av->isys->stream_mutex);
 	if (ip->nr_streaming == ip->nr_queues && ip->streaming)
@@ -1027,7 +1030,8 @@ static int reset_start_streaming(struct ipu_isys_video *av)
 	unsigned long flags;
 	int rval;
 
-	dev_dbg(&av->isys->adev->dev, "%s: start streaming\n", av->vdev.name);
+	dev_warn(&av->isys->adev->dev, "%s():%d %s: start streaming\n",
+		__func__, __LINE__, av->vdev.name);
 
 	spin_lock_irqsave(&aq->lock, flags);
 	while (!list_empty(&aq->active)) {
@@ -1222,7 +1226,7 @@ static int isys_fw_release(struct ipu_isys_video *av)
 		dev_warn(&isys->adev->dev, "%s:%d %s: close fw\n",
 		__func__, __LINE__, av->vdev.name);
 		ipu_fw_isys_close(isys);
-		// isys->reset_needed = true; // force reset
+
 		if (isys->fwcom) {
 			isys->reset_needed = true;
 			ret = -EIO;
@@ -1308,8 +1312,8 @@ static void stop_streaming(struct vb2_queue *q)
 	mutex_lock(&av->isys->reset_mutex);
 	av->isys->in_stop_streaming = false;
 	mutex_unlock(&av->isys->reset_mutex);
-	
-	isys_fw_release(av);
+	if (0 == ip->nr_streaming)
+		isys_fw_release(av);
 }
 
 static unsigned int
