@@ -4344,7 +4344,8 @@ static int ds5_hw_init(struct i2c_client *c, struct ds5 *state)
 	if (!ret)
 		ret = ds5_write(state, DS5_MIPI_LANE_DATARATE, MIPI_LANE_RATE);
 
-	ret = ds5_read(state, DS5_MIPI_CONF_STATUS, &mipi_status);
+	if (!ret)
+		ret = ds5_read(state, DS5_MIPI_CONF_STATUS, &mipi_status);
 
 #ifdef CONFIG_TEGRA_CAMERA_PLATFORM
 	dev_dbg(sd->dev, "%s(): %d phandle %x node %s status %x\n", __func__, __LINE__,

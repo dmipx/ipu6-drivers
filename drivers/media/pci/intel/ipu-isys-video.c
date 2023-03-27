@@ -535,8 +535,7 @@ static int ipu_isys_enum_frameintervals(struct file *file, void *fh,
 
 	if (!pad || !pad->entity)
 		return -EINVAL;
-	if (intervals->width < 0 || intervals->height < 0)
-		return -EINVAL;
+
 	sd = media_entity_to_v4l2_subdev(pad->entity);
 
 	supported_codes = to_ipu_isys_subdev(sd)->supported_codes[pad->index];
