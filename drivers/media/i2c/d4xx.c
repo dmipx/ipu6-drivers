@@ -3056,11 +3056,11 @@ static int ds5_board_setup(struct ds5 *state)
 	int i;
 
 	static struct max9295_pdata max9295_pdata = {
-    	.is_prim_ser = 1, // todo: configurable
-    	.def_addr = 0x40, // todo: configurable
+		.is_prim_ser = 1, // todo: configurable
+		.def_addr = 0x40, // todo: configurable
 	};
 	static struct i2c_board_info i2c_info_des = {
-        I2C_BOARD_INFO("max9296", 0x48),
+		I2C_BOARD_INFO("max9296", 0x48),
 	};
 	static struct i2c_board_info i2c_info_ser = {
 		I2C_BOARD_INFO("max9295", 0x42),
@@ -3105,7 +3105,7 @@ static int ds5_board_setup(struct ds5 *state)
 	dev_info(dev, "Address reassignment for %s-%c 0x%x->0x%x\n",
 		pdata->subdev_info[0].board_info.type, pdata->suffix,
 		state->g_ctx.sdev_def, state->g_ctx.sdev_reg);
- 	//0x42, 0x44, 0x62, 0x64
+	//0x42, 0x44, 0x62, 0x64
 	state->g_ctx.ser_reg = pdata->subdev_info[0].ser_alias;
 	dev_info(dev,  "serializer: i2c-%d@0x%x\n",
 		state->ser_i2c->adapter->nr, state->g_ctx.ser_reg);
@@ -3215,8 +3215,8 @@ static short serdes_bus[4] = {2, 2, 4, 4};
 #endif
 module_param_array(serdes_bus, ushort, NULL, 0444);
 MODULE_PARM_DESC(serdes_bus, "max9295/6 deserializer i2c bus, "
-        "serdes_bus=muxa,muxb,muxc,muxd"
-        "default =2,2,4,4");
+		"serdes_bus=muxa,muxb,muxc,muxd"
+		"default =2,2,4,4");
 
 // Deserializer addresses can be 0x40 0x48 0x4a
 #ifdef PLATFORM_AXIOMTEK
@@ -3226,8 +3226,8 @@ static unsigned short des_addr[4] = {0x48, 0x4a, 0x48, 0x4a};
 #endif
 module_param_array(des_addr, ushort, NULL, 0444);
 MODULE_PARM_DESC(des_addr, "max9296 deserializer i2c address, "
-        "ser_addr=muxa,muxb,muxc,muxd"
-        "default =0x48,0x4a,0x48,0x4a");
+		"ser_addr=muxa,muxb,muxc,muxd"
+		"default =0x48,0x4a,0x48,0x4a");
 
 static int ds5_i2c_addr_setting(struct i2c_client *c, struct ds5 *state)
 {
@@ -3307,14 +3307,14 @@ static int ds5_serdes_setup(struct ds5 *state)
 	ret = max9295_init_settings(state->ser_dev);
 	if (ret) {
 		dev_warn(&c->dev, "%s, failed to init max9295 settings\n",
-			 __func__);
+			__func__);
 		return ret;
 	}
 
 	ret = max9296_init_settings(state->dser_dev);
 	if (ret) {
 		dev_warn(&c->dev, "%s, failed to init max9296 settings\n",
-			 __func__);
+			__func__);
 		return ret;
 	}
 
@@ -3423,11 +3423,11 @@ static int ds5_ctrl_init(struct ds5 *state, int sid)
 	ctrls->link_freq = v4l2_ctrl_new_custom(hdl, &d4xx_controls_link_freq, sensor);
 
 	if (ctrls->link_freq)
-	    ctrls->link_freq->flags |= V4L2_CTRL_FLAG_READ_ONLY;
+		ctrls->link_freq->flags |= V4L2_CTRL_FLAG_READ_ONLY;
 
 	ctrls->query_sub_stream = v4l2_ctrl_new_custom(hdl, &d4xx_controls_q_sub_stream, sensor);
 	ctrls->query_sub_stream->flags |=
-				V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE;
+		V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE;
 
 	ctrls->set_sub_stream = v4l2_ctrl_new_custom(hdl, &d4xx_controls_s_sub_stream, sensor);
 
@@ -3437,14 +3437,6 @@ static int ds5_ctrl_init(struct ds5 *state, int sid)
 		v4l2_ctrl_handler_free(hdl);
 		return ret;
 	}
-
-	// ret = v4l2_ctrl_handler_setup(hdl);
-	// if (ret < 0) {
-	//	dev_err(&state->client->dev,
-	//		"failed to set default values for controls\n");
-	//	v4l2_ctrl_handler_free(hdl);
-	//	return ret;
-	// }
 
 	// Add these after v4l2_ctrl_handler_setup so they won't be set up
 	if (sid >= 0 && sid < 3) {
@@ -3590,29 +3582,29 @@ static int ds5_motion_t_init(struct i2c_client *c, struct ds5 *state)
 {
 	state->motion_t.sensor.mux_pad = DS5_MUX_PAD_MOTION_T_A;
 	return ds5_sensor_init(c, state, &state->motion_t.sensor,
-		       &ds5_motion_t_subdev_ops, "motion detection");
+			&ds5_motion_t_subdev_ops, "motion detection");
 }
 
 static int ds5_rgb_init(struct i2c_client *c, struct ds5 *state)
 {
 	state->rgb.sensor.mux_pad = DS5_MUX_PAD_RGB_A;
 	return ds5_sensor_init(c, state, &state->rgb.sensor,
-		       &ds5_rgb_subdev_ops, "rgb");
+			&ds5_rgb_subdev_ops, "rgb");
 }
 
 static int ds5_imu_init(struct i2c_client *c, struct ds5 *state)
 {
 	state->imu.sensor.mux_pad = DS5_MUX_PAD_IMU_A;
 	return ds5_sensor_init(c, state, &state->imu.sensor,
-		       &ds5_imu_subdev_ops, "imu");
+			&ds5_imu_subdev_ops, "imu");
 }
 
 /* No locking needed */
 static int ds5_mux_enum_mbus_code(struct v4l2_subdev *sd,
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 10)
-				     struct v4l2_subdev_pad_config *cfg,
+				  struct v4l2_subdev_pad_config *cfg,
 #else
-				     struct v4l2_subdev_state *v4l2_state,
+				  struct v4l2_subdev_state *v4l2_state,
 #endif
 				  struct v4l2_subdev_mbus_code_enum *mce)
 {
@@ -3884,14 +3876,13 @@ static int ds5_mux_set_fmt(struct v4l2_subdev *sd,
 /* No locking needed */
 static int ds5_mux_get_fmt(struct v4l2_subdev *sd,
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 10)
-				     struct v4l2_subdev_pad_config *cfg,
+		       struct v4l2_subdev_pad_config *cfg,
 #else
-				     struct v4l2_subdev_state *v4l2_state,
+		       struct v4l2_subdev_state *v4l2_state,
 #endif
 			   struct v4l2_subdev_format *fmt)
 {
 	struct ds5 *state = container_of(sd, struct ds5, mux.sd.subdev);
-	// u32 pad = fmt->pad;
 	int ret = 0;
 	struct ds5_sensor *sensor = state->mux.last_set;
 	u32 pad = sensor->mux_pad;
@@ -3905,8 +3896,7 @@ static int ds5_mux_get_fmt(struct v4l2_subdev *sd,
 	case DS5_MUX_PAD_MOTION_T_A:
 	case DS5_MUX_PAD_RGB_A:
 	case DS5_MUX_PAD_IMU_A:
-		//fmt->format = ds5_ffmts[pad];
-		fmt->format = sensor->format;//ds5_ffmts[pad];
+		fmt->format = sensor->format;
 		break;
 	case DS5_MUX_PAD_EXTERNAL:
 	fmt->format = ds5_ffmts[pad];
@@ -4029,7 +4019,7 @@ static int ds5_mux_s_stream(struct v4l2_subdev *sd, int on)
 		state->g_ctx.dst_vc = vc_id;
 		sensor->pipe_id =
 			max9296_get_available_pipe_id(state->dser_dev,
-						      (int)state->g_ctx.dst_vc);
+					(int)state->g_ctx.dst_vc);
 		if (sensor->pipe_id < 0) {
 			dev_err(&state->client->dev,
 				"No free pipe in max9296\n");
@@ -4149,46 +4139,47 @@ restore_s_state:
 
 	return ret;
 }
+#if 0
+static int ds5_set_power(struct ds5 *state, int on)
+{
+	int ret = 0;
 
-//static int ds5_set_power(struct ds5 *state, int on)
-//{
-//	int ret = 0;
-//
-//	mutex_lock(&state->lock);
-//
-//	if (state->power != !on) {
-//		mutex_unlock(&state->lock);
-//		return 0;
-//	}
-//
-////	gpio_set_value_cansleep(state->pwdn_gpio, on);
-//
-//	dev_info(&state->client->dev, "%s(): power %d\n", __func__, on);
-//
-//	usleep_range(100, 200);
-//
-//	if (on) {
-//		state->power = true;
-//	} else {
-//		state->power = false;
-//	}
-//
-//	mutex_unlock(&state->lock);
-//
-//	/* TODO: Restore controls when powering on */
-//	//if (on)
-//	//	ret = v4l2_ctrl_handler_setup(&state->ctrls.handler);
-//
-//	return ret;
-//}
+	mutex_lock(&state->lock);
+
+	if (state->power != !on) {
+		mutex_unlock(&state->lock);
+		return 0;
+	}
+
+//	gpio_set_value_cansleep(state->pwdn_gpio, on);
+
+	dev_info(&state->client->dev, "%s(): power %d\n", __func__, on);
+
+	usleep_range(100, 200);
+
+	if (on) {
+		state->power = true;
+	} else {
+		state->power = false;
+	}
+
+	mutex_unlock(&state->lock);
+
+	/* TODO: Restore controls when powering on */
+	//if (on)
+	//	ret = v4l2_ctrl_handler_setup(&state->ctrls.handler);
+
+	return ret;
+}
 
 /* Core ops */
-/*static int ds5_mux_set_power(struct v4l2_subdev *sd, int on)
+static int ds5_mux_set_power(struct v4l2_subdev *sd, int on)
 {
 	struct ds5 *state = container_of(sd, struct ds5, mux.sd.subdev);
 
 	return ds5_set_power(state, on);
-}*/
+}
+#endif
 
 #define DS5_N_STREAMS 4
 #define DS5_PAD_SOURCE 0
@@ -4254,7 +4245,7 @@ static int ds5_des_register(struct ds5 *state, struct ds5_des *des)
 	//			       MEDIA_LNK_FL_IMMUTABLE | MEDIA_LNK_FL_ENABLED);
 	//if (ret < 0) {
 	//	goto e_sd;
-       // }
+	// }
 
 	dev_info(sd->dev, "%s(): 0 -> %d\n", __func__, des->mux_pad);
 
@@ -4388,7 +4379,7 @@ static int ds5_mux_init(struct i2c_client *c, struct ds5 *state)
 	// Set owner to NULL so we can unload the driver module
 	sd->owner = NULL;
 	sd->internal_ops = &ds5_mux_internal_ops;
-	v4l2_set_subdevdata(sd, state);
+	v4l2_set_subdevdata(sd, statse);
 	snprintf(sd->name, sizeof(sd->name), "DS5 mux %c", dpdata->suffix);
 
 	sd->flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
