@@ -260,7 +260,7 @@ static int video_open(struct file *file)
 	if (rval)
 		goto out_v4l2_fh_release;
 
-	if (av->enum_link_state == IPU_ISYS_LINK_STATE_ENABLED && 
+	if (av->enum_link_state == IPU_ISYS_LINK_STATE_ENABLED &&
 			media_entity_remote_pad(&av->pad)) {
 		media_pipeline_enumerate_by_vc_cb(av,
 				ipu_isys_inherit_ctrls, NULL);
@@ -888,7 +888,7 @@ static int vidioc_try_fmt_vid_cap_mplane(struct file *file, void *fh,
 					 struct v4l2_format *f)
 {
 	struct ipu_isys_video *av = video_drvdata(file);
-	const struct ipu_isys_pixelformat *pfmt = 
+	const struct ipu_isys_pixelformat *pfmt =
 		av->try_fmt_vid_mplane(av, &f->fmt.pix_mp);
 
 	if (av->enum_link_state == IPU_ISYS_LINK_STATE_DONE)
@@ -1861,6 +1861,7 @@ static int ipu_isys_query_sensor_info(struct media_pad *source_pad,
 
 	return ret;
 }
+
 static int media_pipeline_update_fmt(struct ipu_isys_video *av)
 {
 	struct media_pad *source_pad = media_entity_remote_pad(&av->pad);
@@ -1977,7 +1978,7 @@ static int media_pipeline_walk_by_vc(struct ipu_isys_video *av,
 	/*
 	* Update media link format according to capture format
 	* This needed as for entities CSI2 BE SOC source pad and CSI-2 sink
-	* and source pads have single link point while BE-SOC sink 
+	* and source pads have single link point while BE-SOC sink
 	* and external entities has multiple source pads.
 	*/
 	if (av->enum_link_state == IPU_ISYS_LINK_STATE_DONE || \
