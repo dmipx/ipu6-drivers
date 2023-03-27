@@ -212,9 +212,9 @@ static int media_pipeline_enumerate_by_vc_cb(
 
 		sd = media_entity_to_v4l2_subdev(entity);
 		/* pre-filter sub-devices */
-		if (!entity)
+		if (!sd)
 			continue;
-		if (!sd->name || !strlen(sd->name))
+		if (!strlen(sd->name))
 			continue;
 		if (!sd->ctrl_handler)
 			continue;
@@ -266,14 +266,6 @@ static int video_open(struct file *file)
 	}
 
 	return 0;
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 6, 0)
-	ipu_pipeline_pm_use(&av->vdev.entity, 0);
-#elif LINUX_VERSION_CODE < KERNEL_VERSION(5, 9, 0)
-	v4l2_pipeline_pm_use(&av->vdev.entity, 0);
-#else
-	v4l2_pipeline_pm_put(&av->vdev.entity);
-#endif
 
 out_v4l2_fh_release:
 	v4l2_fh_release(file);
@@ -536,7 +528,7 @@ static int ipu_isys_enum_frameintervals(struct file *file, void *fh,
 	struct media_pad *pad = other_pad(&av->vdev.entity.pads[0]);
 	const u32 *supported_codes;
 	const struct ipu_isys_pixelformat *pfmt;
-	u32 index;
+	int index;
 	struct v4l2_subdev_frame_interval_enum fie;
 	struct v4l2_subdev *sd;
 	int ret = 0;
@@ -628,7 +620,7 @@ int ipu_isys_vidioc_enum_fmt(struct file *file, void *fh,
 	struct v4l2_subdev *sd;
 	const u32 *supported_codes;
 	const struct ipu_isys_pixelformat *pfmt;
-	u32 index;
+	int index;
 	int ret;
 	struct v4l2_subdev_mbus_code_enum mce;
 
@@ -676,7 +668,7 @@ int ipu_isys_vidioc_enum_fmt(struct file *file, void *fh,
 			if (pfmt->code == mce.code)
 				break;
 		}
-	        f->mbus_code = pfmt->code;
+		f->mbus_code = pfmt->code;
 	}
 
 	f->pixelformat = pfmt->pixelformat;

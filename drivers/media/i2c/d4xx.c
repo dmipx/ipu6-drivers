@@ -1730,11 +1730,24 @@ static int ds5_hw_set_exposure(struct ds5 *state, u32 base, s32 val)
  */
 #define DS5_CAMERA_CID_HWMC_RW		(DS5_CAMERA_CID_BASE+32)
 
-static int ds5_send_hwmc(struct ds5 *state, u16 cmdLen, struct hwm_cmd *cmd,
-			 bool isRead, u16 *dataLen)
+#define DS5_HWMC_DATA			0x4900
+#define DS5_HWMC_STATUS			0x4904
+#define DS5_HWMC_RESP_LEN		0x4908
+#define DS5_HWMC_EXEC			0x490C
+
+#define DS5_HWMC_STATUS_OK		0
+#define DS5_HWMC_STATUS_ERR		1
+#define DS5_HWMC_STATUS_WIP		2
+#define DS5_HWMC_BUFFER_SIZE	1024
+
+static int ds5_send_hwmc(struct ds5 *state,
+			u16 cmdLen,
+			struct hwm_cmd *cmd,
+			bool isRead,
+			u16 *dataLen)
 {
 	int ret = 0;
-	u16 status = 2;
+	u16 status = DS5_HWMC_STATUS_WIP;
 	int retries = 100;
 	int errorCode;
 	int iter = retries;
@@ -1750,8 +1763,8 @@ static int ds5_send_hwmc(struct ds5 *state, u16 cmdLen, struct hwm_cmd *cmd,
 			"param1: %d, param2: %d, param3: %d, param4: %d\n",
 			__func__, cmd->header, cmd->magic_word, cmd->opcode,
 			cmd->param1, cmd->param2, cmd->param3, cmd->param4);
-	return 0;
-}
+		return 0;
+	}
 	ds5_raw_write_with_check(state, 0x4900, cmd, cmdLen);
 
 	ds5_write_with_check(state, 0x490C, 0x01); /* execute cmd */
@@ -1771,7 +1784,7 @@ static int ds5_send_hwmc(struct ds5 *state, u16 cmdLen, struct hwm_cmd *cmd,
 			"param1: %d, param2: %d, param3: %d, param4: %d\n",
 			__func__, cmd->header, cmd->magic_word, cmd->opcode,
 			cmd->param1, cmd->param2, cmd->param3, cmd->param4);
-		ret = -EAGAIN;
+		return -EAGAIN;
 	}
 
 	if (isRead) {
@@ -1793,16 +1806,6 @@ static int ds5_send_hwmc(struct ds5 *state, u16 cmdLen, struct hwm_cmd *cmd,
 
 	return 0;
 }
-
-#define DS5_HWMC_DATA			0x4900
-#define DS5_HWMC_STATUS			0x4904
-#define DS5_HWMC_RESP_LEN		0x4908
-#define DS5_HWMC_EXEC			0x490C
-
-#define DS5_HWMC_STATUS_OK		0
-#define DS5_HWMC_STATUS_ERR		1
-#define DS5_HWMC_STATUS_WIP		2
-#define DS5_HWMC_BUFFER_SIZE	1024
 
 static int ds5_get_hwmc(struct ds5 *state, unsigned char *data)
 {
@@ -4315,6 +4318,7 @@ static int ds5_mux_register(struct i2c_client *c, struct ds5 *state)
 
 static int ds5_hw_init(struct i2c_client *c, struct ds5 *state)
 {
+	struct v4l2_subdev *sd = &state->mux.sd.subdev;
 	u16 mipi_status, n_lanes, phy, drate_min, drate_max;
 	int ret = ds5_read(state, DS5_MIPI_SUPPORT_LINES, &n_lanes);
 	if (!ret)
@@ -4326,13 +4330,26 @@ static int ds5_hw_init(struct i2c_client *c, struct ds5 *state)
 	if (!ret)
 		ret = ds5_read(state, DS5_MIPI_DATARATE_MAX, &drate_max);
 
+	if (!ret)
+		dev_dbg(sd->dev, "%s(): %d: %u lanes, phy %x, data rate %u-%u\n",
+			 __func__, __LINE__, n_lanes, phy, drate_min, drate_max);
+
+#ifdef CONFIG_TEGRA_CAMERA_PLATFORM
+	n_lanes = state->mux.sd.numlanes;
+#else
 	n_lanes = 2;
+#endif
 
 	ret = ds5_write(state, DS5_MIPI_LANE_NUMS, n_lanes - 1);
 	if (!ret)
 		ret = ds5_write(state, DS5_MIPI_LANE_DATARATE, MIPI_LANE_RATE);
 
 	ret = ds5_read(state, DS5_MIPI_CONF_STATUS, &mipi_status);
+
+#ifdef CONFIG_TEGRA_CAMERA_PLATFORM
+	dev_dbg(sd->dev, "%s(): %d phandle %x node %s status %x\n", __func__, __LINE__,
+		 c->dev.of_node->phandle, c->dev.of_node->full_name, mipi_status);
+#endif
 
 	return ret;
 }
@@ -4766,6 +4783,7 @@ static ssize_t ds5_dfu_device_write(struct file *flip,
 {
 	struct ds5 *state = flip->private_data;
 	int ret = 0;
+	(void)offset;
 
 	if (mutex_lock_interruptible(&state->lock))
 		return -ERESTARTSYS;
@@ -4843,8 +4861,7 @@ static ssize_t ds5_dfu_device_write(struct file *flip,
 dfu_write_error:
 	state->dfu_dev.dfu_state_flag = DS5_DFU_ERROR;
 	// Reset DFU device to IDLE states
-	ret = ds5_write(state, 0x5010, 0x0);
-	if (!ret)
+	if (!ds5_write(state, 0x5010, 0x0))
 		state->dfu_dev.dfu_state_flag = DS5_DFU_IDLE;
 	mutex_unlock(&state->lock);
 	return ret;
