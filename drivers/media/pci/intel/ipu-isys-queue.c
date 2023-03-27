@@ -973,6 +973,49 @@ out_lib_init:
 	return rval;
 }
 
+static int isys_fw_release(struct ipu_isys_video *av)
+{
+	struct ipu_isys *isys = av->isys;
+	int ret = 0;
+
+	dev_warn(&isys->adev->dev, "%s:%d %s: enter\n",
+		__func__, __LINE__, av->vdev.name);
+	mutex_lock(&isys->reset_mutex);
+	while (isys->in_reset) {
+		mutex_unlock(&isys->reset_mutex);
+		dev_warn(&isys->adev->dev, "%s:%d %s: wait for reset\n",
+			__func__, __LINE__, av->vdev.name);
+		usleep_range(10000, 11000);
+		mutex_lock(&isys->reset_mutex);
+	}
+	mutex_unlock(&isys->reset_mutex);
+
+	mutex_lock(&isys->mutex);
+dev_warn(&isys->adev->dev, "%s:%d %s: close fw video_opened: %d\n",
+		__func__, __LINE__, av->vdev.name, isys->video_opened);
+	if (!--isys->video_opened) {
+		dev_warn(&isys->adev->dev, "%s:%d %s: close fw\n",
+		__func__, __LINE__, av->vdev.name);
+		ipu_fw_isys_close(isys);
+
+		if (isys->fwcom) {
+			isys->reset_needed = true;
+			ret = -EIO;
+		}
+	}
+
+	mutex_unlock(&isys->mutex);
+
+	if (isys->reset_needed)
+		pm_runtime_put_sync(&isys->adev->dev);
+	else
+		pm_runtime_put(&isys->adev->dev);
+
+	dev_warn(&isys->adev->dev, "%s:%d %s: exit\n",
+		__func__, __LINE__, av->vdev.name);
+	return ret;
+}
+
 static int start_streaming(struct vb2_queue *q, unsigned int count)
 {
 	struct ipu_isys_queue *aq = vb2_queue_to_ipu_isys_queue(q);
@@ -997,7 +1040,8 @@ static int start_streaming(struct vb2_queue *q, unsigned int count)
 	mutex_lock(&av->mutex);
 
 	rval = __start_streaming(q, count);
-
+	if (rval)
+		isys_fw_release(av);
 	return rval;
 }
 
@@ -1198,48 +1242,6 @@ end_of_reset:
 	dev_dbg(&isys->adev->dev, "reset done\n");
 
 	return 0;
-}
-
-static int isys_fw_release(struct ipu_isys_video *av)
-{
-	struct ipu_isys *isys = av->isys;
-	int ret = 0;
-
-	dev_warn(&isys->adev->dev, "%s:%d %s: enter\n",
-		__func__, __LINE__, av->vdev.name);
-	mutex_lock(&isys->reset_mutex);
-	while (isys->in_reset) {
-		mutex_unlock(&isys->reset_mutex);
-		dev_warn(&isys->adev->dev, "%s:%d %s: wait for reset\n",
-			__func__, __LINE__, av->vdev.name);
-		usleep_range(10000, 11000);
-		mutex_lock(&isys->reset_mutex);
-	}
-	mutex_unlock(&isys->reset_mutex);
-
-	mutex_lock(&isys->mutex);
-
-	if (!--isys->video_opened) {
-		dev_warn(&isys->adev->dev, "%s:%d %s: close fw\n",
-		__func__, __LINE__, av->vdev.name);
-		ipu_fw_isys_close(isys);
-
-		if (isys->fwcom) {
-			isys->reset_needed = true;
-			ret = -EIO;
-		}
-	}
-
-	mutex_unlock(&isys->mutex);
-
-	if (isys->reset_needed)
-		pm_runtime_put_sync(&isys->adev->dev);
-	else
-		pm_runtime_put(&isys->adev->dev);
-
-	dev_warn(&isys->adev->dev, "%s:%d %s: exit\n",
-		__func__, __LINE__, av->vdev.name);
-	return ret;
 }
 
 static void stop_streaming(struct vb2_queue *q)
