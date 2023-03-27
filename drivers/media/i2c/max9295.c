@@ -319,11 +319,11 @@ int max9295_setup_control(struct device *dev)
 	g_ctx = priv->g_client.g_ctx;
 
 #ifdef CONFIG_OF
- 	if (prim_priv__) {
- 		/* update address reassignment */
- 		max9295_write_reg(&prim_priv__->i2c_client->dev,
- 				MAX9295_DEV_ADDR, (g_ctx->ser_reg << 1));
- 	}
+	if (prim_priv__) {
+		/* update address reassignment */
+		max9295_write_reg(&prim_priv__->i2c_client->dev,
+				MAX9295_DEV_ADDR, (g_ctx->ser_reg << 1));
+	}
 #else
 	if (priv->def_addr) {
 		/* update address reassignment */

@@ -1744,13 +1744,13 @@ static int ds5_send_hwmc(struct ds5 *state, u16 cmdLen, struct hwm_cmd *cmd,
 			"param1: %d, param2: %d, param3: %d, param4: %d\n",
 			__func__, cmd->header, cmd->magic_word, cmd->opcode,
 			cmd->param1, cmd->param2, cmd->param3, cmd->param4);
-if(cmd->opcode == 0x7d) {
+	if(cmd->opcode == 0x7d) {
 			dev_warn(&state->client->dev,
 			"%s(): SKIP ISSUE HWMC header: 0x%x, magic: 0x%x, opcode: 0x%x, "
 			"param1: %d, param2: %d, param3: %d, param4: %d\n",
 			__func__, cmd->header, cmd->magic_word, cmd->opcode,
 			cmd->param1, cmd->param2, cmd->param3, cmd->param4);
-return 0;
+	return 0;
 }
 	ds5_raw_write_with_check(state, 0x4900, cmd, cmdLen);
 
@@ -4379,7 +4379,7 @@ static int ds5_mux_init(struct i2c_client *c, struct ds5 *state)
 	// Set owner to NULL so we can unload the driver module
 	sd->owner = NULL;
 	sd->internal_ops = &ds5_mux_internal_ops;
-	v4l2_set_subdevdata(sd, statse);
+	v4l2_set_subdevdata(sd, state);
 	snprintf(sd->name, sizeof(sd->name), "DS5 mux %c", dpdata->suffix);
 
 	sd->flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
