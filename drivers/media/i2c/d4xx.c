@@ -4431,10 +4431,10 @@ static int ds5_mux_init(struct i2c_client *c, struct ds5 *state)
 #ifdef CONFIG_TEGRA_CAMERA_PLATFORM
 e_ctrl:
 	v4l2_ctrl_handler_free(sd->ctrl_handler);
-#endif
 	media_entity_cleanup(entity);
 
 	return ret;
+#endif
 }
 
 #define USE_Y
