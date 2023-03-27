@@ -823,7 +823,7 @@ static int __start_streaming(struct vb2_queue *q, unsigned int count)
 	}
 
 	mutex_unlock(&av->isys->stream_mutex);
-if (!count) { // link validation fail if we restart stream triggered by fw
+	if (!count) { // link validation fail if we restart stream triggered by fw
 	rval = aq->link_fmt_validate(aq);
 	if (rval) {
 		dev_err(&av->isys->adev->dev,
@@ -831,7 +831,7 @@ if (!count) { // link validation fail if we restart stream triggered by fw
 			av->vdev.name, rval);
 		goto out_unprepare_streaming;
 	}
-}
+	}
 	ip = to_ipu_isys_pipeline(av->vdev.entity.pipe);
 	pipe_av = container_of(ip, struct ipu_isys_video, ip);
 	if (pipe_av != av) {
