@@ -1039,9 +1039,7 @@ static const char *ds5_get_sensor_name(struct ds5 *state)
 
 static void ds5_set_state_last_set(struct ds5 *state)
 {
-	// dev_info(&state->client->dev, "%s(): %s\n",
-	//	__func__, ds5_get_sensor_name(state));
-	printk("%s(): %s\n",
+	 dev_info(&state->client->dev, "%s(): %s\n",
 		__func__, ds5_get_sensor_name(state));
 
 	if (state->is_depth)
@@ -1676,7 +1674,7 @@ static int ds5_hw_set_auto_exposure(struct ds5 *state, u32 base, s32 val)
  */
 static int ds5_hw_set_exposure(struct ds5 *state, u32 base, s32 val)
 {
-	int ret;
+	int ret = -1;
 
 	if (val < 1)
 		val = 1;
@@ -1867,7 +1865,7 @@ static int ds5_get_hwmc(struct ds5 *state, unsigned char *data)
 static int ds5_set_calibration_data(struct ds5 *state,
 		struct hwm_cmd *cmd, u16 length)
 {
-	int ret;
+	int ret = -1;
 	int retries = 10;
 	u16 status = 2;
 
@@ -1896,7 +1894,7 @@ static int ds5_s_state(struct ds5 *state, int vc)
 {
 	int ret = 0;
 
-	dev_warn(&state->client->dev, "%s(): set state for vc: %d\n", __func__, vc);
+	dev_dbg(&state->client->dev, "%s(): set state for vc: %d\n", __func__, vc);
 
 	switch (vc) {
 	case 0:
@@ -2244,9 +2242,8 @@ static int ds5_s_ctrl(struct v4l2_ctrl *ctrl)
 		on = val & 0x00FF;
 		if (vc_id < DS5_MUX_PAD_COUNT)
 			ret = ds5_s_state(state, vc_id);
-		if (on == 0xff) {
+		if (on == 0xff)
 			break;
-		}
 		if (vc_id > NR_OF_DS5_STREAMS - 1)
 			dev_err(&state->client->dev, "invalid vc %d\n", vc_id);
 		else
@@ -2267,7 +2264,7 @@ static int ds5_get_calibration_data(struct ds5 *state, enum table_id id,
 		unsigned char *table, unsigned int length)
 {
 	struct hwm_cmd *cmd;
-	int ret;
+	int ret = -1;
 	int retries = 3;
 	u16 status = 2;
 	u16 table_length;
@@ -2313,7 +2310,7 @@ static int ds5_get_calibration_data(struct ds5 *state, enum table_id id,
 static int ds5_gvd(struct ds5 *state, unsigned char *data)
 {
 	struct hwm_cmd cmd;
-	int ret;
+	int ret = -1;
 	u16 length = 0;
 	u16 status = 2;
 	u8 retries = 3;
@@ -2857,7 +2854,7 @@ static const struct v4l2_subdev_internal_ops ds5_sensor_internal_ops = {
 	.open = ds5_mux_open,
 	.close = ds5_mux_close,
 };
-//#define CONFIG_VIDEO_D4XX_SERDES 1
+
 #ifdef CONFIG_VIDEO_D4XX_SERDES
 
 /*
@@ -3210,7 +3207,7 @@ error:
 	mutex_unlock(&serdes_lock__);
 	return err;
 }
-#define PLATFORM_AXIOMTEK 1
+//#define PLATFORM_AXIOMTEK 1
 #ifdef PLATFORM_AXIOMTEK
 static short serdes_bus[4] = {5, 5, 5, 5};
 #else
@@ -3331,7 +3328,7 @@ static int ds5_ctrl_init(struct ds5 *state, int sid)
 	struct ds5_ctrls *ctrls = &state->ctrls;
 	struct v4l2_ctrl_handler *hdl = &ctrls->handler;
 	struct v4l2_subdev *sd = &state->mux.sd.subdev;
-	int ret;
+	int ret = -1;
 	struct ds5_sensor *sensor = NULL;
 
 	switch (sid) {
@@ -3539,7 +3536,7 @@ static int ds5_sensor_register(struct ds5 *state, struct ds5_sensor *sensor)
 {
 	struct v4l2_subdev *sd = &sensor->sd;
 	struct media_entity *entity = &sensor->sd.entity;
-	int ret;
+	int ret = -1;
 
 	// FIXME: is async needed?
 	ret = v4l2_device_register_subdev(state->mux.sd.subdev.v4l2_dev, sd);
@@ -3585,36 +3582,36 @@ static int ds5_motion_t_init(struct i2c_client *c, struct ds5 *state)
 {
 	state->motion_t.sensor.mux_pad = DS5_MUX_PAD_MOTION_T_A;
 	return ds5_sensor_init(c, state, &state->motion_t.sensor,
-			&ds5_motion_t_subdev_ops, "motion detection");
+		       &ds5_motion_t_subdev_ops, "motion detection");
 }
 
 static int ds5_rgb_init(struct i2c_client *c, struct ds5 *state)
 {
 	state->rgb.sensor.mux_pad = DS5_MUX_PAD_RGB_A;
 	return ds5_sensor_init(c, state, &state->rgb.sensor,
-			&ds5_rgb_subdev_ops, "rgb");
+		       &ds5_rgb_subdev_ops, "rgb");
 }
 
 static int ds5_imu_init(struct i2c_client *c, struct ds5 *state)
 {
 	state->imu.sensor.mux_pad = DS5_MUX_PAD_IMU_A;
 	return ds5_sensor_init(c, state, &state->imu.sensor,
-			&ds5_imu_subdev_ops, "imu");
+		       &ds5_imu_subdev_ops, "imu");
 }
 
 /* No locking needed */
 static int ds5_mux_enum_mbus_code(struct v4l2_subdev *sd,
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 10)
-				  struct v4l2_subdev_pad_config *cfg,
+				     struct v4l2_subdev_pad_config *cfg,
 #else
-				  struct v4l2_subdev_state *v4l2_state,
+				     struct v4l2_subdev_state *v4l2_state,
 #endif
 				  struct v4l2_subdev_mbus_code_enum *mce)
 {
 	struct ds5 *state = container_of(sd, struct ds5, mux.sd.subdev);
 	struct v4l2_subdev_mbus_code_enum tmp = *mce;
 	struct v4l2_subdev *remote_sd;
-	int ret;
+	int ret = -1;
 
 	dev_dbg(&state->client->dev, "%s(): %s \n", __func__, sd->name);
 	switch (mce->pad) {
@@ -3688,7 +3685,7 @@ static int ds5_mux_enum_frame_size(struct v4l2_subdev *sd,
 	struct v4l2_subdev_frame_size_enum tmp = *fse;
 	struct v4l2_subdev *remote_sd;
 	u32 pad = fse->pad;
-	int ret;
+	int ret = -1;
 
 	tmp.pad = 0;
 
@@ -3756,7 +3753,7 @@ static int ds5_mux_enum_frame_interval(struct v4l2_subdev *sd,
 	struct v4l2_subdev_frame_interval_enum tmp = *fie;
 	struct v4l2_subdev *remote_sd;
 	u32 pad = fie->pad;
-	int ret;
+	int ret = -1;
 
 	tmp.pad = 0;
 
@@ -3879,9 +3876,9 @@ static int ds5_mux_set_fmt(struct v4l2_subdev *sd,
 /* No locking needed */
 static int ds5_mux_get_fmt(struct v4l2_subdev *sd,
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 10)
-		       struct v4l2_subdev_pad_config *cfg,
+				     struct v4l2_subdev_pad_config *cfg,
 #else
-		       struct v4l2_subdev_state *v4l2_state,
+				     struct v4l2_subdev_state *v4l2_state,
 #endif
 			   struct v4l2_subdev_format *fmt)
 {
@@ -3908,7 +3905,7 @@ static int ds5_mux_get_fmt(struct v4l2_subdev *sd,
 		return -EINVAL;
 	}
 
-	dev_info(sd->dev, "%s(): fmt->pad:%d, sensor->mux_pad:%u size:%d-%d, code:0x%x field:%d, color:%d\n",
+	dev_dbg(sd->dev, "%s(): fmt->pad:%d, sensor->mux_pad:%u size:%d-%d, code:0x%x field:%d, color:%d\n",
 		__func__, fmt->pad, pad,
 		fmt->format.width, fmt->format.height, fmt->format.code,
 		fmt->format.field, fmt->format.colorspace);
@@ -3972,7 +3969,33 @@ static int ds5_mux_s_frame_interval(struct v4l2_subdev *sd,
 
 	return 0;
 }
+#ifndef CONFIG_VIDEO_D4XX_SERDES
+int d4xx_reset_oneshot(struct ds5 *state)
+{
+	int s_addr = state->client->addr;
+	int n_addr = 0;
+	int ret = 0;
 
+	if (s_addr == 0x12)
+		n_addr = 0x48;
+	if (s_addr == 0x14)
+		n_addr = 0x4a;
+	if (s_addr == 0x16)
+		n_addr = 0x68;
+	if (s_addr == 0x18)
+		n_addr = 0x6c;
+	if (n_addr) {
+		state->client->addr = n_addr;
+		dev_warn(&state->client->dev, "One-shot reset 0x%x enable auto-link\n", n_addr);
+		ret = max9296_write_8(state, 0x0010, 0x31); // One-shot reset  enable auto-link
+		state->client->addr = s_addr;
+		/* delay to settle link */
+		msleep(100);
+	}
+
+	return ret;
+}
+#endif
 static int ds5_mux_s_stream(struct v4l2_subdev *sd, int on)
 {
 	struct ds5 *state = container_of(sd, struct ds5, mux.sd.subdev);
@@ -4051,7 +4074,7 @@ static int ds5_mux_s_stream(struct v4l2_subdev *sd, int on)
 			msleep_range(DS5_START_POLL_TIME);
 		}
 
-		if (DS5_START_MAX_COUNT == i) {
+		if (i == DS5_START_MAX_COUNT) {
 			dev_err(&state->client->dev,
 				"start streaming failed, exit on timeout\n");
 			/* notify fw */
@@ -4090,26 +4113,7 @@ static int ds5_mux_s_stream(struct v4l2_subdev *sd, int on)
 			dev_warn(&state->client->dev, "release pipe failed\n");
 		sensor->pipe_id = -1;
 #else
-{ // ipu6 yavta compatibility
-	int s_addr = state->client->addr;
-	int n_addr;
-	if (s_addr == 0x12)
-		n_addr = 0x48;
-	if (s_addr == 0x14)
-		n_addr = 0x4a;
-	if (s_addr == 0x16)
-		n_addr = 0x68;
-	if (s_addr == 0x18)
-		n_addr = 0x6c;
-	if (n_addr) {
-		state->client->addr = n_addr;
-		dev_warn(&state->client->dev, "One-shot reset 0x%x enable auto-link\n", n_addr);
-		max9296_write_8(state, 0x0010, 0x31); // One-shot reset  enable auto-link
-		state->client->addr = s_addr;
-		/* delay to settle link */
-		msleep(100);
-	}
-}
+		d4xx_reset_oneshot(state);
 #endif
 	}
 
@@ -4136,7 +4140,7 @@ restore_s_state:
 	ds5_read(state, config_status_base, &status);
 	dev_err(&state->client->dev,
 			"%s stream toggle failed! %x status 0x%04x\n",
-			ds5_get_sensor_name(state) ,restore_val, status);
+			ds5_get_sensor_name(state), restore_val, status);
 
 	sensor->streaming = restore_val;
 
@@ -4797,7 +4801,7 @@ static ssize_t ds5_dfu_device_write(struct file *flip,
 					__func__, ret);
 			goto dfu_write_error;
 		}
-	/*fallthrough - procceed to recovery*/
+	/* fallthrough - procceed to recovery */
 	__attribute__((__fallthrough__));
 	case DS5_DFU_RECOVERY:
 		ret = ds5_dfu_detach(state);
@@ -4808,7 +4812,7 @@ static ssize_t ds5_dfu_device_write(struct file *flip,
 		}
 		state->dfu_dev.dfu_state_flag = DS5_DFU_IN_PROGRESS;
 		state->dfu_dev.init_v4l_f = 1;
-	/*fallthrough - procceed to download*/
+	/* fallthrough - procceed to download */
 	__attribute__((__fallthrough__));
 	case DS5_DFU_IN_PROGRESS: {
 		unsigned int dfu_full_blocks = len / DFU_BLOCK_SIZE;
@@ -5465,15 +5469,17 @@ static int ds5_probe(struct i2c_client *c, const struct i2c_device_id *id)
 	return 0;
 
 e_chardev:
-	if(state->dfu_dev.ds5_class)
+	if (state->dfu_dev.ds5_class)
 		ds5_chrdev_remove(state);
 e_regulator:
 	if (state->vcc)
 		regulator_disable(state->vcc);
+#ifdef CONFIG_VIDEO_D4XX_SERDES
 	if (state->ser_i2c)
 		i2c_unregister_device(state->ser_i2c);
 	if (state->dser_i2c)
 		i2c_unregister_device(state->dser_i2c);
+#endif
 	return ret;
 }
 
