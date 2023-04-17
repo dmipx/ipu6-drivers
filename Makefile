@@ -16,6 +16,7 @@ export CONFIG_I2C_IOEXPANDER_SER_MAX9295 = m
 export CONFIG_I2C_IOEXPANDER_DESER_MAX9296 = m
 
 obj-y += drivers/media/i2c/
+obj-y += drivers/media/platform/intel/
 
 KERNEL_SRC := /lib/modules/$(shell uname -r)/build
 MODSRC := $(shell pwd)

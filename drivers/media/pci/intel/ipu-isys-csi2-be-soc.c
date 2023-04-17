@@ -185,8 +185,35 @@ static struct v4l2_subdev_ops csi2_be_soc_sd_ops = {
 	.pad = &csi2_be_soc_sd_pad_ops,
 };
 
+static int csi2_be_soc_link_validate(struct media_link *link)
+{
+	struct media_pipeline *media_pipe;
+	struct ipu_isys_pipeline *ip;
+	struct v4l2_subdev *source_sd;
+	struct v4l2_subdev *sink_sd;
+
+	int rval;
+
+	if (!link->sink->entity || !link->source->entity)
+		return -EINVAL;
+	media_pipe = media_entity_pipeline(link->sink->entity);
+	if (!media_pipe)
+		return -EINVAL;
+
+	ip = to_ipu_isys_pipeline(media_pipe);
+	source_sd = media_entity_to_v4l2_subdev(link->source->entity);
+	sink_sd = media_entity_to_v4l2_subdev(link->sink->entity);
+	//source:Intel IPU6 CSI-2 1, sink:Intel IPU6 CSI2 BE SOC 1
+	dev_warn(&ip->isys->adev->dev,
+					"%s():%d source:%s, sink:%s\n",
+					__func__, __LINE__,
+					source_sd->name, sink_sd->name);
+	return 0;
+}
+
 static struct media_entity_operations csi2_be_soc_entity_ops = {
-	.link_validate = v4l2_subdev_link_validate,
+//	.link_validate = v4l2_subdev_link_validate,
+	.link_validate = csi2_be_soc_link_validate,
 };
 
 static void csi2_be_soc_set_ffmt(struct v4l2_subdev *sd,

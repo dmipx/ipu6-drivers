@@ -550,8 +550,7 @@ static int max9295_write_8(struct ds5 *state, u16 reg, u8 val)
 
 	return ret;
 }
-#endif
-
+#else
 static int ds5_write_8(struct ds5 *state, u16 reg, u8 val)
 {
 	int ret;
@@ -567,7 +566,7 @@ static int ds5_write_8(struct ds5 *state, u16 reg, u8 val)
 
 	return ret;
 }
-
+#endif
 static int ds5_write(struct ds5 *state, u16 reg, u16 val)
 {
 	int ret;
@@ -5338,7 +5337,7 @@ static int ds5_probe(struct i2c_client *c, const struct i2c_device_id *id)
 	dev_warn(&c->dev, "Probing new driver for D45x\n");
 	dev_warn(&c->dev, "Driver data NAEL %d\n", (int)id->driver_data);
 	state->variant = ds5_variants + id->driver_data;
-
+#ifdef CONFIG_OF
 	state->vcc = devm_regulator_get(&c->dev, "vcc");
 	if (IS_ERR(state->vcc)) {
 		ret = PTR_ERR(state->vcc);
@@ -5353,6 +5352,7 @@ static int ds5_probe(struct i2c_client *c, const struct i2c_device_id *id)
 			return ret;
 		}
 	}
+#endif
 	state->regmap = devm_regmap_init_i2c(c, &ds5_regmap_config);
 	if (IS_ERR(state->regmap)) {
 		ret = PTR_ERR(state->regmap);
@@ -5522,6 +5522,9 @@ static int ds5_remove(struct i2c_client *c)
 		i2c_unregister_device(state->ser_i2c);
 	if (state->dser_i2c)
 		i2c_unregister_device(state->dser_i2c);
+#endif
+#ifndef CONFIG_TEGRA_CAMERA_PLATFORM
+	state->is_depth = 1;
 #endif
 	dev_info(&c->dev, "D4XX remove %s\n",
 			ds5_get_sensor_name(state));

@@ -819,6 +819,7 @@ static int __start_streaming(struct vb2_queue *q, unsigned int count)
 	}
 
 	mutex_unlock(&av->isys->stream_mutex);
+
 	if (!count) { // link validation fail if we restart stream triggered by fw
 	rval = aq->link_fmt_validate(aq);
 	if (rval) {
