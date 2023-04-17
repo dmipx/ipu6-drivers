@@ -820,14 +820,12 @@ static int __start_streaming(struct vb2_queue *q, unsigned int count)
 
 	mutex_unlock(&av->isys->stream_mutex);
 
-	if (!count) { // link validation fail if we restart stream triggered by fw
 	rval = aq->link_fmt_validate(aq);
 	if (rval) {
 		dev_err(&av->isys->adev->dev,
 			"%s: link format validation failed (%d)\n",
 			av->vdev.name, rval);
 		goto out_unprepare_streaming;
-	}
 	}
 
 	ip = to_ipu_isys_pipeline(media_entity_pipeline(&av->vdev.entity));
@@ -994,7 +992,9 @@ static int isys_fw_release(struct ipu_isys_video *av)
 	mutex_lock(&isys->mutex);
 dev_warn(&isys->adev->dev, "%s:%d %s: close fw video_opened: %d\n",
 		__func__, __LINE__, av->vdev.name, isys->video_opened);
-	if (!--isys->video_opened) {
+	if (isys->video_opened)
+		isys->video_opened--;
+	if (!isys->video_opened) {
 		dev_warn(&isys->adev->dev, "%s:%d %s: close fw\n",
 		__func__, __LINE__, av->vdev.name);
 		ipu_fw_isys_close(isys);
@@ -1109,7 +1109,7 @@ static int ipu_isys_reset(struct ipu_isys_video *self_av)
 	int rval, i, j;
 	int has_streaming = 0;
 
-	dev_dbg(&isys->adev->dev, "%s\n", __func__);
+	dev_warn(&isys->adev->dev, "%s\n", __func__);
 
 	mutex_lock(&isys->reset_mutex);
 	if (isys->in_reset) {

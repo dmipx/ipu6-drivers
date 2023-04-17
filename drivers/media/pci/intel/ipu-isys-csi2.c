@@ -333,6 +333,7 @@ static int csi2_link_validate(struct media_link *link)
 	struct ipu_isys_pipeline *ip;
 	struct v4l2_subdev *source_sd;
 	struct v4l2_subdev *sink_sd;
+	struct v4l2_subdev_format fmt = { 0 };
 
 	int rval;
 
@@ -350,77 +351,21 @@ static int csi2_link_validate(struct media_link *link)
 	ipu_isys_video_add_capture_done(ip, csi2_capture_done);
 	source_sd = media_entity_to_v4l2_subdev(link->source->entity);
 	sink_sd = media_entity_to_v4l2_subdev(link->sink->entity);
-	//source:DS5 mux b, sink:Intel IPU6 CSI-2 1
-	dev_warn(&csi2->isys->adev->dev,
-					"%s():%d source:%s, sink:%s\n",
-					__func__, __LINE__,
-					source_sd->name, sink_sd->name);
+
 	if (!source_sd)
 		return -ENODEV;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0)
-		struct media_pad *remote_pad =
-		    media_entity_remote_pad(&csi2->asd.pad[CSI2_PAD_SOURCE]);
-		struct media_pad *source_pad =
-		    media_entity_remote_pad(&csi2->asd.pad[CSI2_PAD_SINK]);
-#else
-		struct media_pad *remote_pad =
-		    media_pad_remote_pad_first(&csi2->asd.pad[CSI2_PAD_SOURCE]);
-		struct media_pad *source_pad =
-		    media_pad_remote_pad_first(&csi2->asd.pad[CSI2_PAD_SINK]);
-#endif
-{
-	struct v4l2_subdev_format fmt = { 0 };
+	/* source is external entity, get it's format */
 	fmt.which = V4L2_SUBDEV_FORMAT_ACTIVE;
-	fmt.pad = remote_pad->index;
-	rval = v4l2_subdev_call(sink_sd, pad, get_fmt, NULL, &fmt);
-//csi2_link_validate():354 source:DS5 mux b, sink:Intel IPU6 CSI-2 1
-//CSI2_PAD_SOURCE wxh: 640x480, code:0x2010
-//CSI2_PAD_SINK wxh: 640x480, code:0x2010
-
-	dev_warn(&csi2->isys->adev->dev,
-			"CSI2_PAD_SOURCE wxh: %ux%u, code:0x%x\n",
-			fmt.format.width, fmt.format.height,
-			fmt.format.code);
-	fmt.pad = source_pad->index;
-	rval = v4l2_subdev_call(sink_sd, pad, get_fmt, NULL, &fmt);
-	dev_warn(&csi2->isys->adev->dev,
-			"CSI2_PAD_SINK wxh: %ux%u, code:0x%x\n",
-			fmt.format.width, fmt.format.height,
-			fmt.format.code);
-
-	fmt.pad = 0;
+	fmt.pad = CSI2_PAD_SINK;
 	rval = v4l2_subdev_call(source_sd, pad, get_fmt, NULL, &fmt);
-	//source_sd: DS5 mux b, wxh: 640x480, code:0x200f
 
-	dev_warn(&csi2->isys->adev->dev,
-			"source_sd: %s, wxh: %ux%u, code:0x%x\n",
-			source_sd->name, fmt.format.width, fmt.format.height,
-			fmt.format.code);
+	/* set csi2 format for the same as external entity */
+	rval = v4l2_subdev_call(sink_sd, pad, set_fmt, NULL, &fmt);
 	
-}
-
-#if 0
 	rval = v4l2_subdev_link_validate(link);
 	if (rval)
 		return rval;
 
-	if (!v4l2_ctrl_g_ctrl(csi2->store_csi2_header)) {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0)
-		struct media_pad *remote_pad =
-		    media_entity_remote_pad(&csi2->asd.pad[CSI2_PAD_SOURCE]);
-#else
-		struct media_pad *remote_pad =
-		    media_pad_remote_pad_first(&csi2->asd.pad[CSI2_PAD_SOURCE]);
-#endif
-
-		if (remote_pad &&
-		    is_media_entity_v4l2_subdev(remote_pad->entity)) {
-			dev_err(&csi2->isys->adev->dev,
-				"CSI2 BE requires CSI2 headers.\n");
-			return -EINVAL;
-		}
-	}
-#endif
 	if (strncmp(source_sd->name, IPU_ISYS_ENTITY_PREFIX,
 		    strlen(IPU_ISYS_ENTITY_PREFIX)) != 0) {
 		ip->external = link->source;
