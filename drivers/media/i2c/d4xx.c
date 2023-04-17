@@ -5331,11 +5331,9 @@ static int ds5_probe(struct i2c_client *c, const struct i2c_device_id *id)
 
 	mutex_init(&state->lock);
 
-	dev_warn(&c->dev, "Driver addr 0x%x\n", c->addr);
-
 	state->client = c;
-	dev_warn(&c->dev, "Probing new driver for D45x\n");
-	dev_warn(&c->dev, "Driver data NAEL %d\n", (int)id->driver_data);
+	dev_warn(&c->dev, "Probing driver for D45x\n");
+
 	state->variant = ds5_variants + id->driver_data;
 #ifdef CONFIG_OF
 	state->vcc = devm_regulator_get(&c->dev, "vcc");
