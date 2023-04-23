@@ -3394,6 +3394,7 @@ static int ds5_ctrl_init(struct ds5 *state, int sid)
 		sensor = &state->imu.sensor;
 		break;
 	default:
+		/* control for MUX */
 		hdl = &ctrls->handler;
 		sensor = NULL;
 		break;
@@ -3426,7 +3427,7 @@ static int ds5_ctrl_init(struct ds5 *state, int sid)
 						0, 128, 1, 64);
 	}
 
-	if (ctrls->gain) {
+	if (ctrls->gain && (sid >= 0 && sid < 3)) {
 		ctrls->gain->priv = sensor;
 		ctrls->gain->flags =
 				V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE;
@@ -3446,6 +3447,7 @@ static int ds5_ctrl_init(struct ds5 *state, int sid)
 			ctrls->auto_exp->priv = sensor;
 		}
 	}
+
 	/* Exposure time: V4L2_CID_EXPOSURE_ABSOLUTE default unit: 100 us. */
 	if (sid == 0 || sid == 2) {
 		ctrls->exposure = v4l2_ctrl_new_std(hdl, ops,
@@ -3457,7 +3459,7 @@ static int ds5_ctrl_init(struct ds5 *state, int sid)
 					1, MAX_RGB_EXP, 1, DEF_RGB_EXP);
 	}
 
-	if (ctrls->exposure) {
+	if (ctrls->exposure && (sid >= 0 && sid < 3)) {
 		ctrls->exposure->priv = sensor;
 		ctrls->exposure->flags |=
 				V4L2_CTRL_FLAG_VOLATILE | V4L2_CTRL_FLAG_EXECUTE_ON_WRITE;
