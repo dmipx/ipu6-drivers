@@ -423,11 +423,10 @@ skip_put_adapter:
 }
 
 static int isys_unregister_ext_subdev(struct ipu_isys *isys,
-				    struct ipu_isys_subdev_info *sd_info)
+				      struct ipu_isys_subdev_info *sd_info)
 {
 	struct i2c_adapter *adapter;
 	struct i2c_client *client;
-	int rval;
 	int bus;
 
 	bus = ipu_get_i2c_bus_id(sd_info->i2c.i2c_adapter_id,
@@ -435,13 +434,13 @@ static int isys_unregister_ext_subdev(struct ipu_isys *isys,
 			sizeof(sd_info->i2c.i2c_adapter_bdf));
 	if (bus < 0) {
 		dev_err(&isys->adev->dev,
-			"getting i2c bus id for adapter %d (bdf %s) failed",
+			"getting i2c bus id for adapter %d (bdf %s) failed\n",
 			sd_info->i2c.i2c_adapter_id,
 			sd_info->i2c.i2c_adapter_bdf);
 		return -ENOENT;
 	}
-	dev_info(&isys->adev->dev,
-		 "got i2c bus id %d for adapter %d (bdf %s)", bus,
+	dev_dbg(&isys->adev->dev,
+		 "got i2c bus id %d for adapter %d (bdf %s)\n", bus,
 		 sd_info->i2c.i2c_adapter_id,
 		 sd_info->i2c.i2c_adapter_bdf);
 	adapter = i2c_get_adapter(bus);
@@ -450,27 +449,23 @@ static int isys_unregister_ext_subdev(struct ipu_isys *isys,
 		return -ENOENT;
 	}
 
-	dev_info(&isys->adev->dev,
-		 "unregister i2c subdev for %s (address %2.2x, bus %d)",
+	dev_dbg(&isys->adev->dev,
+		 "unregister i2c subdev for %s (address %2.2x, bus %d)\n",
 		 sd_info->i2c.board_info.type, sd_info->i2c.board_info.addr,
 		 bus);
 
 	client = isys_find_i2c_subdev(adapter, sd_info);
 	if (!client) {
 		dev_dbg(&isys->adev->dev, "Device not exists\n");
-		rval = 0;
 		goto skip_put_adapter;
 	}
 
 	i2c_unregister_device(client);
-	i2c_put_adapter(adapter);
-
-	return 0;
 
 skip_put_adapter:
 	i2c_put_adapter(adapter);
 
-	return rval;
+	return 0;
 }
 
 static void isys_register_ext_subdevs(struct ipu_isys *isys)
@@ -491,10 +486,9 @@ static void isys_unregister_ext_subdevs(struct ipu_isys *isys)
 	struct ipu_isys_subdev_pdata *spdata = isys->pdata->spdata;
 	struct ipu_isys_subdev_info **sd_info;
 
-	if (!spdata) {
-		dev_info(&isys->adev->dev, "no subdevice info provided\n");
+	if (!spdata)
 		return;
-	}
+
 	for (sd_info = spdata->subdevs; *sd_info; sd_info++)
 		isys_unregister_ext_subdev(isys, *sd_info);
 }
@@ -833,6 +827,8 @@ static int isys_register_devices(struct ipu_isys *isys)
 out_isys_notifier_cleanup:
 #if !IS_ENABLED(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
 	isys_notifier_cleanup(isys);
+#else
+	isys_unregister_ext_subdevs(isys);
 #endif
 
 #if !IS_ENABLED(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
