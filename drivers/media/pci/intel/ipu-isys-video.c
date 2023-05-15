@@ -607,6 +607,54 @@ static int ipu_isys_enum_fmt_subdev(struct ipu_isys_video *av,
 	return ret;
 }
 
+int ipu_isys_vidioc_enum_fmt_meta(struct file *file, void *fh,
+			     struct v4l2_fmtdesc *f)
+{
+	struct ipu_isys_video *av = video_drvdata(file);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 5, 0)
+	struct media_pad *pad =
+	    av->vdev.entity.pads[0].flags & MEDIA_PAD_FL_SOURCE ?
+	    av->vdev.entity.links[0].sink : av->vdev.entity.links[0].source;
+#else
+	struct media_pad *pad = other_pad(&av->vdev.entity.pads[0]);
+#endif
+	struct v4l2_subdev *sd;
+	const u32 *supported_codes;
+	const struct ipu_isys_pixelformat *pfmt;
+
+	if (!pad || !pad->entity)
+		return -EINVAL;
+	sd = media_entity_to_v4l2_subdev(pad->entity);
+	supported_codes = to_ipu_isys_subdev(sd)->supported_codes[pad->index];
+
+	/* Walk the 0-terminated array for the metadata code. */
+ 	for (; *supported_codes &&
+		*supported_codes != MEDIA_BUS_FMT_FIXED;
+	     supported_codes++);
+
+	supported_codes += f->index;
+	if (!*supported_codes)
+		return -EINVAL;
+
+	f->flags = 0;
+
+	/* Code found */
+	for (pfmt = av->pfmts; pfmt->bpp; pfmt++){
+		if (pfmt->code == MEDIA_BUS_FMT_FIXED)
+			break;
+	}
+
+	if (!pfmt->bpp) {
+		dev_warn(&av->isys->adev->dev,
+			 "Format not found in mapping table.");
+		return -EINVAL;
+	}
+
+	f->pixelformat = pfmt->pixelformat;
+
+	return 0;
+}
+
 int ipu_isys_vidioc_enum_fmt(struct file *file, void *fh,
 			     struct v4l2_fmtdesc *f)
 {
@@ -1044,10 +1092,6 @@ static int link_validate(struct media_link *link)
 		ip->source = to_ipu_isys_subdev(sd)->source;
 	}
 
-	dev_warn(&ip->isys->adev->dev,
-			"%s():%d sd:%s[%d]->[%d] vc:%d\n",
-			__func__, __LINE__, sd->name,
-			source_pad->index, ip->external->index, ip->vc);
 	ip->nr_queues++;
 
 	/* set format for "CSI2 BE SOC" specific pad
@@ -2755,7 +2799,7 @@ static const struct v4l2_ioctl_ops ioctl_ops_mplane = {
 	.vidioc_g_fmt_vid_cap_mplane = vidioc_g_fmt_vid_cap_mplane,
 	.vidioc_s_fmt_vid_cap_mplane = vidioc_s_fmt_vid_cap_mplane,
 	.vidioc_try_fmt_vid_cap_mplane = vidioc_try_fmt_vid_cap_mplane,
-	.vidioc_enum_fmt_meta_cap = ipu_isys_vidioc_enum_fmt,
+	.vidioc_enum_fmt_meta_cap = ipu_isys_vidioc_enum_fmt_meta,
 	.vidioc_g_fmt_meta_cap = vidioc_g_fmt_meta_cap,
 	.vidioc_s_fmt_meta_cap = vidioc_s_fmt_meta_cap,
 	.vidioc_try_fmt_meta_cap = vidioc_try_fmt_vid_cap_mplane,

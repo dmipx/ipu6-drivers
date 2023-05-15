@@ -799,7 +799,7 @@ static int __start_streaming(struct vb2_queue *q, unsigned int count)
 	bool first;
 	int rval;
 
-	dev_dbg(&av->isys->adev->dev,
+	dev_warn(&av->isys->adev->dev,
 		"stream: %s: width %u, height %u, css pixelformat %u\n",
 		av->vdev.name, av->mpix.width, av->mpix.height,
 		av->pfmt->css_pixelformat);
@@ -820,14 +820,15 @@ static int __start_streaming(struct vb2_queue *q, unsigned int count)
 
 	mutex_unlock(&av->isys->stream_mutex);
 
-	rval = aq->link_fmt_validate(aq);
-	if (rval) {
-		dev_err(&av->isys->adev->dev,
-			"%s: link format validation failed (%d)\n",
-			av->vdev.name, rval);
-		goto out_unprepare_streaming;
+	if (av->pfmt->css_pixelformat){
+		rval = aq->link_fmt_validate(aq);
+		if (rval) {
+			dev_err(&av->isys->adev->dev,
+				"%s: link format validation failed (%d)\n",
+				av->vdev.name, rval);
+			goto out_unprepare_streaming;
+		}
 	}
-
 	ip = to_ipu_isys_pipeline(media_entity_pipeline(&av->vdev.entity));
 	pipe_av = container_of(ip, struct ipu_isys_video, ip);
 	if (pipe_av != av) {
