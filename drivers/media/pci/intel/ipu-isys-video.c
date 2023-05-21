@@ -80,7 +80,7 @@ const struct ipu_isys_pixelformat ipu_isys_pfmts_be_soc[] = {
 	 IPU_FW_ISYS_FRAME_FORMAT_UYVY},
 	{V4L2_PIX_FMT_Y8I, 16, 16, 0, MEDIA_BUS_FMT_VYUY8_1X16,
 	 IPU_FW_ISYS_FRAME_FORMAT_YUYV},
-	{V4L2_PIX_FMT_Y12I, 24, 24, 0, MEDIA_BUS_FMT_RGB888_1X24,
+	{V4L2_PIX_FMT_Y12I, 32, 24, 0, MEDIA_BUS_FMT_RGB888_1X24,
 	 IPU_FW_ISYS_FRAME_FORMAT_RGBA888},
 	{V4L2_META_FMT_D4XX, 8, 8, 0, MEDIA_BUS_FMT_FIXED, 0},
 	{}
@@ -628,9 +628,9 @@ int ipu_isys_vidioc_enum_fmt_meta(struct file *file, void *fh,
 	supported_codes = to_ipu_isys_subdev(sd)->supported_codes[pad->index];
 
 	/* Walk the 0-terminated array for the metadata code. */
- 	for (; *supported_codes &&
-		*supported_codes != MEDIA_BUS_FMT_FIXED;
-	     supported_codes++);
+	for (; *supported_codes &&
+		   *supported_codes != MEDIA_BUS_FMT_FIXED;
+		    supported_codes++);
 
 	supported_codes += f->index;
 	if (!*supported_codes)
@@ -910,7 +910,7 @@ static int vidioc_s_fmt_vid_cap_mplane(struct file *file, void *fh,
 		ret = media_pipeline_enumerate_by_vc_cb(av, ipu_isys_set_fmt_subdev, &fmt);
 		if (ret)
 			return -EINVAL;
-		
+
 		/* set format for CSI-2 and CSI2 BE SOC  */
 	do {
 		/* Non-subdev nodes can be safely ignored here. */
@@ -2025,9 +2025,7 @@ ipu_isys_prepare_fw_cfg_default(struct ipu_isys_video *av,
 						      BITS_PER_BYTE),
 					 av->isys->line_align);
 
-	// if (input_pin_info->dt == IPU_ISYS_MIPI_CSI2_TYPE_EMBEDDED8)
-	if (input_pin_info->dt == IPU_ISYS_MIPI_CSI2_TYPE_EMBEDDED8 ||
-	    input_pin_info->dt == IPU_ISYS_MIPI_CSI2_TYPE_RGB888)
+	if (input_pin_info->dt == IPU_ISYS_MIPI_CSI2_TYPE_EMBEDDED8)
 		pin_info->pt = IPU_FW_ISYS_PIN_TYPE_MIPI;
 	else
 		pin_info->pt = aq->css_pin_type;

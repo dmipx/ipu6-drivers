@@ -586,7 +586,7 @@ static void buf_queue(struct vb2_buffer *vb)
 		return;
 
 	if (!pipe_av || !media_pipe || !vb->vb2_queue->start_streaming_called) {
-		dev_info(&av->isys->adev->dev,
+		dev_dbg(&av->isys->adev->dev,
 			"no pipe or streaming, adding to incoming\n");
 		return;
 	}
@@ -595,7 +595,7 @@ static void buf_queue(struct vb2_buffer *vb)
 	mutex_lock(&pipe_av->mutex);
 
 	if (ip->nr_streaming != ip->nr_queues) {
-		dev_info(&av->isys->adev->dev,
+		dev_dbg(&av->isys->adev->dev,
 			"not streaming yet, adding to incoming\n");
 		goto out;
 	}
@@ -621,8 +621,6 @@ static void buf_queue(struct vb2_buffer *vb)
 	msg = ipu_get_fw_msg_buf(ip);
 	if (!msg) {
 		rval = -ENOMEM;
-		dev_err(&av->isys->adev->dev,
-			"failed to get fw msg buf\n");
 		goto out;
 	}
 	buf = to_frame_msg_buf(msg);
@@ -633,7 +631,7 @@ static void buf_queue(struct vb2_buffer *vb)
 					ip->nr_output_pins);
 
 	if (!ip->streaming) {
-		dev_info(&av->isys->adev->dev,
+		dev_dbg(&av->isys->adev->dev,
 			"got a buffer to start streaming!\n");
 		rval = ipu_isys_stream_start(ip, &bl, true);
 		if (rval)
@@ -799,7 +797,7 @@ static int __start_streaming(struct vb2_queue *q, unsigned int count)
 	bool first;
 	int rval;
 
-	dev_warn(&av->isys->adev->dev,
+	dev_dbg(&av->isys->adev->dev,
 		"stream: %s: width %u, height %u, css pixelformat %u\n",
 		av->vdev.name, av->mpix.width, av->mpix.height,
 		av->pfmt->css_pixelformat);
@@ -841,7 +839,7 @@ static int __start_streaming(struct vb2_queue *q, unsigned int count)
 		ip->nr_queues);
 	list_add(&aq->node, &ip->queues);
 	if (ip->nr_streaming != ip->nr_queues) {
-		dev_err(&av->isys->adev->dev,
+		dev_dbg(&av->isys->adev->dev,
 			"%s: streaming queue not match (%d)(%d)\n",
 			av->vdev.name, ip->nr_streaming, ip->nr_queues);
 		goto out;
@@ -855,7 +853,7 @@ static int __start_streaming(struct vb2_queue *q, unsigned int count)
 				"buffer list invalid\n");
 			goto out_stream_start;
 		} else if (rval < 0) {
-			dev_err(&av->isys->adev->dev,
+			dev_dbg(&av->isys->adev->dev,
 				"no request available, postponing streamon\n");
 			goto out;
 		}
@@ -1110,7 +1108,7 @@ static int ipu_isys_reset(struct ipu_isys_video *self_av)
 	int rval, i, j;
 	int has_streaming = 0;
 
-	dev_warn(&isys->adev->dev, "%s\n", __func__);
+	dev_dbg(&isys->adev->dev, "%s\n", __func__);
 
 	mutex_lock(&isys->reset_mutex);
 	if (isys->in_reset) {

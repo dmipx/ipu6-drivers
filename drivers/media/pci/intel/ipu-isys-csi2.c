@@ -361,7 +361,7 @@ static int csi2_link_validate(struct media_link *link)
 
 	/* set csi2 format for the same as external entity */
 	rval = v4l2_subdev_call(sink_sd, pad, set_fmt, NULL, &fmt);
-	
+
 	rval = v4l2_subdev_link_validate(link);
 	if (rval)
 		return rval;
@@ -370,7 +370,7 @@ static int csi2_link_validate(struct media_link *link)
 		    strlen(IPU_ISYS_ENTITY_PREFIX)) != 0) {
 		ip->external = link->source;
 		ip->source = to_ipu_isys_subdev(sink_sd)->source;
-		dev_warn(&csi2->isys->adev->dev, "%s: using source %d\n",
+		dev_dbg(&csi2->isys->adev->dev, "%s: using source %d\n",
 			sink_sd->entity.name, ip->source);
 	}
 
