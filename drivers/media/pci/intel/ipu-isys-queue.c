@@ -921,6 +921,12 @@ static int isys_fw_open(struct ipu_isys_video *av)
 		return rval;
 	}
 
+	if (av->aq.vbq.type == V4L2_BUF_TYPE_META_CAPTURE) {
+		dev_warn(&isys->adev->dev, "%s:%d %s: node vbq is METADATA!\n",
+			__func__, __LINE__, av->vdev.name);
+		return 0;
+	}
+
 	mutex_lock(&isys->mutex);
 	if (isys->video_opened++) {
 		/* Already open */
@@ -978,6 +984,13 @@ static int isys_fw_release(struct ipu_isys_video *av)
 
 	dev_warn(&isys->adev->dev, "%s:%d %s: enter\n",
 		__func__, __LINE__, av->vdev.name);
+
+	if (av->aq.vbq.type == V4L2_BUF_TYPE_META_CAPTURE) {
+		dev_warn(&isys->adev->dev, "%s:%d %s: node vbq is METADATA!\n",
+			__func__, __LINE__, av->vdev.name);
+		return 0;
+	}
+
 	mutex_lock(&isys->reset_mutex);
 	while (isys->in_reset) {
 		mutex_unlock(&isys->reset_mutex);
@@ -989,7 +1002,7 @@ static int isys_fw_release(struct ipu_isys_video *av)
 	mutex_unlock(&isys->reset_mutex);
 
 	mutex_lock(&isys->mutex);
-dev_warn(&isys->adev->dev, "%s:%d %s: close fw video_opened: %d\n",
+	dev_warn(&isys->adev->dev, "%s:%d %s: close fw video_opened: %d\n",
 		__func__, __LINE__, av->vdev.name, isys->video_opened);
 	if (isys->video_opened)
 		isys->video_opened--;
