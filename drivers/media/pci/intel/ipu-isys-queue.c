@@ -996,7 +996,12 @@ dev_warn(&isys->adev->dev, "%s:%d %s: close fw video_opened: %d\n",
 	if (!isys->video_opened) {
 		dev_warn(&isys->adev->dev, "%s:%d %s: close fw\n",
 		__func__, __LINE__, av->vdev.name);
-		ipu_fw_isys_close(isys);
+		if (isys && isys->fwcom) {
+			ipu_fw_isys_close(isys);
+		} else {
+		dev_warn(&isys->adev->dev, "%s:%d %s: skip close fw, no context\n",
+			__func__, __LINE__, av->vdev.name);
+		}
 
 		if (isys->fwcom) {
 			isys->reset_needed = true;
