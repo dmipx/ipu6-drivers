@@ -1601,9 +1601,10 @@ static int media_pipeline_walk_by_vc(struct ipu_isys_video *av,
 #endif
 
 		if (entity->pipe && entity->pipe == pipe) {
-			dev_dbg(entity->graph_obj.mdev->dev,
-			       "Pipe active for %s. when start for %s\n",
+			dev_warn(entity->graph_obj.mdev->dev,
+			       "Pipe active for %s. when start for %s, RESET pipe\n",
 			       entity->name, entity_err->name);
+			entity->pipe  = NULL;
 		}
 		/*
 		 * If entity's pipe is not null and it is video device, it has
@@ -2516,6 +2517,7 @@ int ipu_isys_video_prepare_streaming(struct ipu_isys_video *av,
 
 	ip = &av->ip;
 
+dev_warn(dev, "prepare stream: state:%d nr_queues:%d->0\n", state, ip->nr_queues);
 	WARN_ON(ip->nr_streaming);
 	ip->has_sof = false;
 	ip->nr_queues = 0;
@@ -2857,6 +2859,8 @@ static int ipu_isys_video_s_ctrl(struct v4l2_ctrl *ctrl)
 	switch (ctrl->id) {
 		case V4L2_CID_IPU_ENUMERATE_LINK:
 		av->enum_link_state = ctrl->val;
+		if(av->enum_link_state == IPU_ISYS_LINK_STATE_MD)
+			av->vdev.device_caps &= ~(V4L2_CAP_VIDEO_CAPTURE_MPLANE);
 		break;
 	}
 

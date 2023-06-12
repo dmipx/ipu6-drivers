@@ -797,8 +797,8 @@ static int __start_streaming(struct vb2_queue *q, unsigned int count)
 	bool first;
 	int rval;
 
-	dev_warn(&av->isys->adev->dev,
-		"stream: %s: width %u, height %u, css pixelformat %u\n",
+dev_warn(&av->isys->adev->dev,
+		"stream: %s: width %u, height %u, css pixelformat 0x%x\n",
 		av->vdev.name, av->mpix.width, av->mpix.height,
 		av->pfmt->css_pixelformat);
 
@@ -818,6 +818,10 @@ static int __start_streaming(struct vb2_queue *q, unsigned int count)
 
 	mutex_unlock(&av->isys->stream_mutex);
 
+dev_warn(&av->isys->adev->dev,
+		"%s: first:%d, css pixelformat 0x%x\n",
+		av->vdev.name, first, av->pfmt->css_pixelformat);
+
 	if (first && av->pfmt->css_pixelformat){
 		rval = aq->link_fmt_validate(aq);
 		if (rval) {
@@ -833,14 +837,16 @@ static int __start_streaming(struct vb2_queue *q, unsigned int count)
 		mutex_unlock(&av->mutex);
 		mutex_lock(&pipe_av->mutex);
 	}
+dev_warn(&av->isys->adev->dev, "%s: nr_streaming:%d->%d, nr_queues:%d, streaming:%d!\n",
+av->vdev.name,ip->nr_streaming,ip->nr_streaming+1,ip->nr_queues,ip->streaming);
 
 	ip->nr_streaming++;
-	dev_dbg(&av->isys->adev->dev, "queue %u of %u\n", ip->nr_streaming,
+	dev_warn(&av->isys->adev->dev, "queue %u of %u\n", ip->nr_streaming,
 		ip->nr_queues);
 	list_add(&aq->node, &ip->queues);
 	if (ip->nr_streaming != ip->nr_queues) {
-		dev_dbg(&av->isys->adev->dev,
-			"%s: streaming queue not match (%d)(%d)\n",
+		dev_warn(&av->isys->adev->dev,
+			"%s: streaming queue not match nr_streaming(%d) nr_queues(%d) out..\n",
 			av->vdev.name, ip->nr_streaming, ip->nr_queues);
 		goto out;
 	}
@@ -998,8 +1004,8 @@ static int isys_fw_release(struct ipu_isys_video *av)
 	mutex_unlock(&isys->reset_mutex);
 
 	mutex_lock(&isys->mutex);
-	dev_warn(&isys->adev->dev, "%s:%d %s: close fw video_opened: %d\n",
-		__func__, __LINE__, av->vdev.name, isys->video_opened);
+	dev_warn(&isys->adev->dev, "%s:%d %s: close fw video_opened: %d->%d\n",
+		__func__, __LINE__, av->vdev.name, isys->video_opened, isys->video_opened-1);
 	if (isys->video_opened)
 		isys->video_opened--;
 	if (!isys->video_opened) {
@@ -1072,8 +1078,8 @@ static void reset_stop_streaming(struct ipu_isys_video *av)
 	dev_warn(&av->isys->adev->dev, "%s():%d %s: stop streaming\n",
 		__func__, __LINE__, av->vdev.name);
 	if (av->aq.vbq.type == V4L2_BUF_TYPE_META_CAPTURE) {
-		dev_warn(&av->isys->adev->dev, "%s():%d %s: METADATA NODE!\n",
-		__func__, __LINE__, av->vdev.name);
+		dev_warn(&av->isys->adev->dev, "%s():%d %s: METADATA NODE! nr_streaming:%d\n",
+		__func__, __LINE__, av->vdev.name, ip->nr_streaming);
 	}
 	mutex_lock(&av->isys->stream_mutex);
 	if (ip->nr_streaming == ip->nr_queues && ip->streaming)
@@ -1179,9 +1185,7 @@ static int ipu_isys_reset(struct ipu_isys_video *self_av)
 			continue;
 
 		ip = &av->ip;
-if(i==1 && j<5)
-dev_warn(&isys->adev->dev, "%s:%d %s: ip->streaming: %d ip->nr_streaming: %d av->streaming: %d\n",
-__func__, __LINE__, av->vdev.name, ip->streaming, ip->nr_streaming, av->streaming);
+
 		mutex_lock(&av->mutex);
 		// if (av->aq.vbq.type != V4L2_BUF_TYPE_META_CAPTURE)
 		if (!ip->streaming) {
@@ -1192,6 +1196,17 @@ __func__, __LINE__, av->vdev.name, ip->streaming, ip->nr_streaming, av->streamin
 		has_streaming = true;
 		reset_stop_streaming(av);
 		mutex_unlock(&av->mutex);
+		//metadata node
+// 		av = &csi2_be_soc->av[j+1];
+// 		ip = &av->ip;
+dev_warn(&isys->adev->dev, "%s:%d %s: TODO: RESET METADATA\n",
+__func__, __LINE__, av->vdev.name);
+// 		mutex_lock(&av->mutex);
+// 		av->reset = true;
+		// has_streaming = true;
+		// reset_stop_streaming(av);
+		// mutex_unlock(&av->mutex);
+		j++; //skip
 		}
 	}
 
@@ -1256,9 +1271,7 @@ __func__, __LINE__, av->vdev.name, ip->streaming, ip->nr_streaming, av->streamin
 		csi2_be_soc = &isys->csi2_be_soc[i];
 		for (j = 0; j < NR_OF_CSI2_BE_SOC_SOURCE_PADS; j++) {
 			av = &csi2_be_soc->av[j];
-if(i==1 && j<5)
-dev_warn(&isys->adev->dev, "%s:%d %s: soc:%d, pad: %d, reset:%d\n",
-__func__, __LINE__, av->vdev.name, i, j, av->reset);
+
 		if (!av->reset)
 			continue;
 
