@@ -960,18 +960,16 @@ static int vidioc_s_fmt_meta_cap(struct file *file, void *fh,
 	if (mpix.height == 0)
 		mpix.height = 1;
 	dev_warn(&av->isys->adev->dev,
-		"%s:%d %s: width %u, height %u, pixelformat %u\n",__func__, __LINE__,
-			av->vdev.name, mpix.width, mpix.height,
-			mpix.pixelformat);
+		"%s:%d %s: width %u, height %u, pixelformat %u\n",
+		__func__, __LINE__,
+		av->vdev.name, mpix.width, mpix.height,
+		mpix.pixelformat);
 	av->pfmt = av->try_fmt_vid_mplane(av, &mpix);
 	av->aq.vbq.type = V4L2_BUF_TYPE_META_CAPTURE;
 	av->aq.vbq.is_multiplanar = false;
 	av->aq.vbq.is_output = false;
 	av->mpix = mpix;
-	dev_warn(&av->isys->adev->dev,
-		"%s:%d %s: width %u, height %u, pixelformat %u\n",__func__, __LINE__,
-			av->vdev.name, av->mpix.width, av->mpix.height,
-			mpix.pixelformat);
+
 	f->fmt.meta.width = mpix.width;
 	f->fmt.meta.height = mpix.height;
 	f->fmt.meta.dataformat = mpix.pixelformat;
@@ -1601,10 +1599,10 @@ static int media_pipeline_walk_by_vc(struct ipu_isys_video *av,
 #endif
 
 		if (entity->pipe && entity->pipe == pipe) {
-			dev_warn(entity->graph_obj.mdev->dev,
+			dev_dbg(entity->graph_obj.mdev->dev,
 			       "Pipe active for %s. when start for %s, RESET pipe\n",
 			       entity->name, entity_err->name);
-			entity->pipe  = NULL;
+			//entity->pipe  = NULL;
 		}
 		/*
 		 * If entity's pipe is not null and it is video device, it has

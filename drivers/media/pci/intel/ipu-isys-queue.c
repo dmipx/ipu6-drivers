@@ -76,7 +76,7 @@ static int queue_setup(struct vb2_queue *q,
 #else
 		alloc_devs[i] = aq->dev;
 #endif
-		dev_dbg(&av->isys->adev->dev,
+		dev_warn(&av->isys->adev->dev,
 			"%s: queue setup: plane %d size %u\n",
 			av->vdev.name, i, sizes[i]);
 	}
@@ -122,9 +122,9 @@ int ipu_isys_buf_prepare(struct vb2_buffer *vb)
 	struct ipu_isys_video *av = ipu_isys_queue_to_video(aq);
 
 	dev_dbg(&av->isys->adev->dev,
-		"buffer: %s: configured size %u, buffer size %lu\n",
+		"buffer: %s: configured size %u, buffer size %lu, addr: 0x%x vaddr: 0x%x\n",
 		av->vdev.name,
-		av->mpix.plane_fmt[0].sizeimage, vb2_plane_size(vb, 0));
+		av->mpix.plane_fmt[0].sizeimage, vb2_plane_size(vb, 0), (u32)vb2_dma_contig_plane_dma_addr(vb, 0), vb2_plane_vaddr(vb,0));
 
 	if (av->mpix.plane_fmt[0].sizeimage > vb2_plane_size(vb, 0))
 		return -EINVAL;
@@ -323,6 +323,9 @@ static int buffer_list_get(struct ipu_isys_pipeline *ip,
 		if (list_empty(&aq->incoming)) {
 			spin_unlock_irqrestore(&aq->lock, flags);
 			ret = -ENODATA;
+dev_warn(&ip->isys->adev->dev, "%s:%d %s: list_empty(&aq->incoming) ENODATA\n",
+__func__, __LINE__,
+container_of(ip, struct ipu_isys_video, ip)->vdev.name);
 			goto error;
 		}
 
@@ -331,10 +334,14 @@ static int buffer_list_get(struct ipu_isys_pipeline *ip,
 		if (ib->req) {
 			spin_unlock_irqrestore(&aq->lock, flags);
 			ret = -ENODATA;
+dev_warn(&ip->isys->adev->dev, "%s:%d %s: ib->req ENODATA\n",
+__func__, __LINE__,
+container_of(ip, struct ipu_isys_video, ip)->vdev.name);
+
 			goto error;
 		}
 
-		dev_dbg(&ip->isys->adev->dev, "buffer: %s: buffer %u\n",
+		dev_warn(&ip->isys->adev->dev, "buffer: %s: buffer %u\n",
 			ipu_isys_queue_to_video(aq)->vdev.name,
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 4, 0)
 			ipu_isys_buffer_to_vb2_buffer(ib)->v4l2_buf.index
@@ -371,7 +378,7 @@ static int buffer_list_get(struct ipu_isys_pipeline *ip,
 		bl->nbufs++;
 	}
 
-	dev_dbg(&ip->isys->adev->dev, "get buffer list %p, %u buffers\n", bl,
+	dev_warn(&ip->isys->adev->dev, "get buffer list %p, %u buffers\n", bl,
 		bl->nbufs);
 	return ret;
 
@@ -549,8 +556,8 @@ static void buf_queue(struct vb2_buffer *vb)
 	unsigned int i;
 	int rval;
 
-	dev_dbg(&av->isys->adev->dev, "buffer: %s: buf_queue %u\n",
-		av->vdev.name,
+	dev_dbg(&av->isys->adev->dev,"buffer: %s: %8.8x, buf_queue %u\n",
+		av->vdev.name, vb2_dma_contig_plane_dma_addr(vb, 0),
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 4, 0)
 		vb->v4l2_buf.index
 #else
@@ -559,8 +566,8 @@ static void buf_queue(struct vb2_buffer *vb)
 	    );
 
 	for (i = 0; i < vb->num_planes; i++)
-		dev_dbg(&av->isys->adev->dev, "iova: plane %u iova 0x%x\n", i,
-			(u32)vb2_dma_contig_plane_dma_addr(vb, i));
+		dev_dbg(&av->isys->adev->dev, "iova: plane %u iova 0x%x vaddr:0x%x\n", i,
+			(u32)vb2_dma_contig_plane_dma_addr(vb, i), vb2_plane_vaddr(vb,i));
 
 	spin_lock_irqsave(&aq->lock, flags);
 	list_add(&ib->head, &aq->incoming);
@@ -612,8 +619,8 @@ static void buf_queue(struct vb2_buffer *vb)
 				"error: buffer list get failed\n");
 			WARN_ON(1);
 		} else {
-			dev_dbg(&av->isys->adev->dev,
-				"not enough buffers available\n");
+			dev_warn(&av->isys->adev->dev,
+				"not enough buffers available rval: %d\n", rval);
 		}
 		goto out;
 	}
@@ -716,7 +723,7 @@ int ipu_isys_link_fmt_validate(struct ipu_isys_queue *aq)
 
 /* Return buffers back to videobuf2. */
 static void return_buffers(struct ipu_isys_queue *aq,
-			   enum vb2_buffer_state state)
+			   enum vb2_buffer_state state, int nr_streaming)
 {
 	struct ipu_isys_video *av = ipu_isys_queue_to_video(aq);
 	int reset_needed = 0;
@@ -780,7 +787,7 @@ static void return_buffers(struct ipu_isys_queue *aq,
 
 	spin_unlock_irqrestore(&aq->lock, flags);
 
-	if (reset_needed) {
+	if (reset_needed && !nr_streaming) {
 		mutex_lock(&av->isys->mutex);
 		av->isys->reset_needed = true;
 		mutex_unlock(&av->isys->mutex);
@@ -859,8 +866,8 @@ av->vdev.name,ip->nr_streaming,ip->nr_streaming+1,ip->nr_queues,ip->streaming);
 				"buffer list invalid\n");
 			goto out_stream_start;
 		} else if (rval < 0) {
-			dev_dbg(&av->isys->adev->dev,
-				"no request available, postponing streamon\n");
+			dev_warn(&av->isys->adev->dev,
+				"no request available, postponing streamon %d\n", rval);
 			goto out;
 		}
 	}
@@ -895,7 +902,7 @@ out_unprepare_streaming:
 
 out_return_buffers:
 	mutex_unlock(&av->isys->stream_mutex);
-	return_buffers(aq, VB2_BUF_STATE_QUEUED);
+	return_buffers(aq, VB2_BUF_STATE_QUEUED, ip->nr_streaming);
 
 	return rval;
 }
@@ -1041,10 +1048,6 @@ static int start_streaming(struct vb2_queue *q, unsigned int count)
 	struct ipu_isys_queue *aq = vb2_queue_to_ipu_isys_queue(q);
 	struct ipu_isys_video *av = ipu_isys_queue_to_video(aq);
 	int rval;
-	if (av->aq.vbq.type == V4L2_BUF_TYPE_META_CAPTURE) {
-		dev_warn(&av->isys->adev->dev, "%s():%d %s: METADATA NODE!\n",
-		__func__, __LINE__, av->vdev.name);
-	}
 
 	rval = isys_fw_open(av);
 	if (rval < 0) {
@@ -1072,20 +1075,23 @@ static int start_streaming(struct vb2_queue *q, unsigned int count)
 
 static void reset_stop_streaming(struct ipu_isys_video *av)
 {
-	struct ipu_isys_pipeline *ip = &av->ip;
+	struct ipu_isys_pipeline *ip = container_of(av->vdev.entity.pipe, struct ipu_isys_pipeline, pipe);
 	struct ipu_isys_queue *aq = &av->aq;
 
 	dev_warn(&av->isys->adev->dev, "%s():%d %s: stop streaming\n",
 		__func__, __LINE__, av->vdev.name);
-	if (av->aq.vbq.type == V4L2_BUF_TYPE_META_CAPTURE) {
-		dev_warn(&av->isys->adev->dev, "%s():%d %s: METADATA NODE! nr_streaming:%d\n",
-		__func__, __LINE__, av->vdev.name, ip->nr_streaming);
-	}
+
 	mutex_lock(&av->isys->stream_mutex);
 	if (ip->nr_streaming == ip->nr_queues && ip->streaming)
 		ipu_isys_video_set_streaming(av, 0, NULL);
 	if (ip->nr_streaming == 1)
 		ipu_isys_video_prepare_streaming(av, 0);
+	else
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0)
+		av->vdev.entity.pipe = NULL;
+#else
+		av->vdev.entity.pads[0].pipe = NULL;
+#endif
 	mutex_unlock(&av->isys->stream_mutex);
 
 	ip->nr_streaming--;
@@ -1101,10 +1107,6 @@ static int reset_start_streaming(struct ipu_isys_video *av)
 
 	dev_warn(&av->isys->adev->dev, "%s():%d %s: start streaming\n",
 		__func__, __LINE__, av->vdev.name);
-	if (av->aq.vbq.type == V4L2_BUF_TYPE_META_CAPTURE) {
-		dev_warn(&av->isys->adev->dev, "%s():%d %s: METADATA NODE!\n",
-		__func__, __LINE__, av->vdev.name);
-	}
 
 	spin_lock_irqsave(&aq->lock, flags);
 	while (!list_empty(&aq->active)) {
@@ -1112,6 +1114,10 @@ static int reset_start_streaming(struct ipu_isys_video *av)
 				struct
 				ipu_isys_buffer,
 				head);
+ struct vb2_buffer *vb = ipu_isys_buffer_to_vb2_buffer(ib);
+dev_dbg(&av->isys->adev->dev, "buffer: %s: %8.8x, vaddr: %p moved from active to incoming\n",
+av->vdev.name, vb2_dma_contig_plane_dma_addr(vb, 0), vb2_plane_vaddr(vb,0));
+
 
 		list_del(&ib->head);
 		list_add_tail(&ib->head, &aq->incoming);
@@ -1129,7 +1135,7 @@ static int reset_start_streaming(struct ipu_isys_video *av)
 	return rval;
 }
 
-static int ipu_isys_reset(struct ipu_isys_video *self_av)
+static int ipu_isys_reset(struct ipu_isys_video *self_av, struct ipu_isys_pipeline *self_ip)
 {
 	struct ipu_isys *isys = self_av->isys;
 	struct ipu_bus_device *adev = isys->adev;
@@ -1151,11 +1157,12 @@ static int ipu_isys_reset(struct ipu_isys_video *self_av)
 	mutex_unlock(&isys->reset_mutex);
 
 	av = &isys->csi2->av;
+	ip = container_of(av->vdev.entity.pipe, struct ipu_isys_pipeline, pipe);
 
-	if (av != self_av) {
+	if (av != self_av && ip && ip != self_ip) {
 		ip = &av->ip;
 		mutex_lock(&av->mutex);
-		if (ip->streaming) {
+		if (ip->streaming && !ip->nr_streaming) {
 			av->reset = true;
 			has_streaming = true;
 			reset_stop_streaming(av);
@@ -1164,11 +1171,11 @@ static int ipu_isys_reset(struct ipu_isys_video *self_av)
 	}
 
 	av = &isys->csi2_be.av;
+	ip = container_of(av->vdev.entity.pipe, struct ipu_isys_pipeline, pipe);
 
-	if (av != self_av) {
-		ip = &av->ip;
+	if (av != self_av && ip && ip != self_ip) {
 		mutex_lock(&av->mutex);
-		if (ip->streaming) {
+		if (ip->streaming && !ip->nr_streaming) {
 			av->reset = true;
 			has_streaming = true;
 			reset_stop_streaming(av);
@@ -1178,17 +1185,18 @@ static int ipu_isys_reset(struct ipu_isys_video *self_av)
 
 	for (i = 0; i < NR_OF_CSI2_BE_SOC_DEV; i++) {
 		csi2_be_soc = &isys->csi2_be_soc[i];
+		// for (j = NR_OF_CSI2_BE_SOC_SOURCE_PADS - 1; j >= 0; j--) {
 		for (j = 0; j < NR_OF_CSI2_BE_SOC_SOURCE_PADS; j++) {
 			av = &csi2_be_soc->av[j];
-
 		if (av == self_av)
 			continue;
 
-		ip = &av->ip;
+		ip = container_of(av->vdev.entity.pipe, struct ipu_isys_pipeline, pipe);
+		if (!ip || ip == self_ip)
+			continue;
 
 		mutex_lock(&av->mutex);
-		// if (av->aq.vbq.type != V4L2_BUF_TYPE_META_CAPTURE)
-		if (!ip->streaming) {
+		if (!ip->streaming && !ip->nr_streaming) {
 			mutex_unlock(&av->mutex);
 			continue;
 		}
@@ -1196,17 +1204,6 @@ static int ipu_isys_reset(struct ipu_isys_video *self_av)
 		has_streaming = true;
 		reset_stop_streaming(av);
 		mutex_unlock(&av->mutex);
-		//metadata node
-// 		av = &csi2_be_soc->av[j+1];
-// 		ip = &av->ip;
-dev_warn(&isys->adev->dev, "%s:%d %s: TODO: RESET METADATA\n",
-__func__, __LINE__, av->vdev.name);
-// 		mutex_lock(&av->mutex);
-// 		av->reset = true;
-		// has_streaming = true;
-		// reset_stop_streaming(av);
-		// mutex_unlock(&av->mutex);
-		j++; //skip
 		}
 	}
 
@@ -1271,7 +1268,6 @@ __func__, __LINE__, av->vdev.name);
 		csi2_be_soc = &isys->csi2_be_soc[i];
 		for (j = 0; j < NR_OF_CSI2_BE_SOC_SOURCE_PADS; j++) {
 			av = &csi2_be_soc->av[j];
-
 		if (!av->reset)
 			continue;
 
@@ -1319,7 +1315,7 @@ static void stop_streaming(struct vb2_queue *q)
 	if (!ip) {
 		dev_err(&av->isys->adev->dev, "stop: %s: ip cleard!\n",
 			av->vdev.name);
-		return_buffers(aq, VB2_BUF_STATE_ERROR);
+		return_buffers(aq, VB2_BUF_STATE_ERROR, 0);
 		return;
 	}
 
@@ -1337,6 +1333,12 @@ static void stop_streaming(struct vb2_queue *q)
 		ipu_isys_video_set_streaming(av, 0, NULL);
 	if (ip->nr_streaming == 1)
 		ipu_isys_video_prepare_streaming(av, 0);
+	else
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0)
+		av->vdev.entity.pipe = NULL;
+#else
+		av->vdev.entity.pads[0].pipe = NULL;
+#endif
 	mutex_unlock(&av->isys->stream_mutex);
 
 	ip->nr_streaming--;
@@ -1348,9 +1350,9 @@ static void stop_streaming(struct vb2_queue *q)
 		mutex_lock(&av->mutex);
 	}
 
-	return_buffers(aq, VB2_BUF_STATE_ERROR);
+	return_buffers(aq, VB2_BUF_STATE_ERROR, ip->nr_streaming);
 	if (av->isys->reset_needed)
-		ipu_isys_reset(av);
+		ipu_isys_reset(av, ip);
 
 	dev_warn(&av->isys->adev->dev, "stop: %s: exit\n",
 		av->vdev.name);
@@ -1504,8 +1506,8 @@ void ipu_isys_queue_buf_ready(struct ipu_isys_pipeline *ip,
 	struct vb2_v4l2_buffer *buf;
 #endif
 
-	dev_dbg(&isys->adev->dev, "buffer: %s: received buffer %8.8x\n",
-		ipu_isys_queue_to_video(aq)->vdev.name, info->pin.addr);
+	dev_warn(&isys->adev->dev, "ipu_isys_queue_buf_ready: buffer: %s: received buffer %8.8x, pin_id %d\n",
+		ipu_isys_queue_to_video(aq)->vdev.name, info->pin.addr, info->pin_id);
 
 	spin_lock_irqsave(&aq->lock, flags);
 	if (list_empty(&aq->active)) {
