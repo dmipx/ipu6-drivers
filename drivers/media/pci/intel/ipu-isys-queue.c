@@ -1345,12 +1345,12 @@ static void stop_streaming(struct vb2_queue *q)
 	}
 
 	return_buffers(aq, VB2_BUF_STATE_ERROR);
-	if (av->isys->reset_needed)
+	if (av->isys->reset_needed) {
 		if (!ip->nr_streaming)
 			ipu_isys_reset(av, ip);
 		else
 			av->isys->reset_needed = 0;
-
+	}
 	dev_warn(&av->isys->adev->dev, "stop: %s: exit\n",
 		av->vdev.name);
 
