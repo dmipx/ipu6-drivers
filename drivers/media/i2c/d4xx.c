@@ -2080,7 +2080,7 @@ static int ds5_s_ctrl(struct v4l2_ctrl *ctrl)
 			memcpy(calib_cmd, &set_calib_data, sizeof(set_calib_data));
 			calib_cmd->header = 276;
 			calib_cmd->param1 = DEPTH_CALIBRATION_ID;
-			memcpy (calib_cmd->Data, (u8 *)ctrl->p_new.p, 256);
+			memcpy(calib_cmd->Data, (u8 *)ctrl->p_new.p, 256);
 			ret = ds5_set_calibration_data(state, calib_cmd,
 					sizeof(struct hwm_cmd) + 256);
 			devm_kfree(&state->client->dev, calib_cmd);
@@ -2107,7 +2107,7 @@ static int ds5_s_ctrl(struct v4l2_ctrl *ctrl)
 					ret = -ENOMEM;
 					break;
 				}
-			memcpy (calib_cmd, &set_calib_data, sizeof (set_calib_data));
+				memcpy(calib_cmd, &set_calib_data, sizeof (set_calib_data));
 				calib_cmd->header = 532;
 				calib_cmd->param1 = COEF_CALIBRATION_ID;
 				memcpy(calib_cmd->Data, (u8 *)ctrl->p_new.p, 512);
@@ -2119,7 +2119,6 @@ static int ds5_s_ctrl(struct v4l2_ctrl *ctrl)
 		break;
 	case DS5_CAMERA_CID_AE_ROI_SET: {
 		struct hwm_cmd ae_roi_cmd;
-
 		memcpy(&ae_roi_cmd, &set_ae_roi, sizeof(ae_roi_cmd));
 		ae_roi_cmd.param1 = *((u16 *)ctrl->p_new.p_u16);
 		ae_roi_cmd.param2 = *((u16 *)ctrl->p_new.p_u16 + 1);
@@ -2131,7 +2130,6 @@ static int ds5_s_ctrl(struct v4l2_ctrl *ctrl)
 		}
 	case DS5_CAMERA_CID_AE_SETPOINT_SET: {
 		struct hwm_cmd *ae_setpoint_cmd;
-
 		if (ctrl->p_new.p_s32) {
 			dev_dbg(&state->client->dev, "%s():0x%x \n",
 				__func__, *(ctrl->p_new.p_s32));
@@ -2269,7 +2267,6 @@ static int ds5_s_ctrl(struct v4l2_ctrl *ctrl)
 	case DS5_CAMERA_CID_HWMC_RW:
 		if (ctrl->p_new.p_u8) {
 			u16 size = *((u8 *)ctrl->p_new.p_u8 + 1) << 8;
-
 			size |= *((u8 *)ctrl->p_new.p_u8 + 0);
 			ret = ds5_send_hwmc(state, size + 4,
 					(struct hwm_cmd *)ctrl->p_new.p_u8, false, NULL);
@@ -2930,14 +2927,14 @@ static int ds5_board_setup(struct ds5 *state)
 	int err;
 	int i;
 
-	err = of_property_read_u32(node, "reg", &state->g_ctx.sdev_reg); //12
+	err = of_property_read_u32(node, "reg", &state->g_ctx.sdev_reg);
 	if (err < 0) {
 		dev_err(dev, "reg not found\n");
 		goto error;
 	}
 
 	err = of_property_read_u32(node, "def-addr",
-					&state->g_ctx.sdev_def);//10
+					&state->g_ctx.sdev_def);
 	if (err < 0) {
 		dev_err(dev, "def-addr not found\n");
 		goto error;
@@ -4343,7 +4340,6 @@ e_depth:
 static void ds5_mux_unregistered(struct v4l2_subdev *sd)
 {
 	struct ds5 *state = v4l2_get_subdevdata(sd);
-
 	ds5_sensor_remove(&state->imu.sensor);
 	ds5_sensor_remove(&state->rgb.sensor);
 	ds5_sensor_remove(&state->motion_t.sensor);
@@ -4980,7 +4976,6 @@ e_motion_t:
 	media_entity_cleanup(&state->motion_t.sensor.sd.entity);
 e_depth:
 	media_entity_cleanup(&state->depth.sensor.sd.entity);
-
 	return ret;
 }
 
@@ -5208,7 +5203,6 @@ static ssize_t ds5_read_reg_store(struct device *dev,
 			struct dev_ds5_reg_attribute, attr);
 	int rc = -1;
 	u32 reg;
-
 	ds5_rw_attr->valid = 0;
 	/* Decode input */
 	rc = sscanf(buf, "0x%04x", &reg);
@@ -5529,6 +5523,7 @@ e_regulator:
 static int ds5_remove(struct i2c_client *c)
 {
 	struct ds5 *state = container_of(i2c_get_clientdata(c), struct ds5, mux.sd.subdev);
+
 #ifdef CONFIG_VIDEO_D4XX_SERDES
 	int i, ret;
 	for (i = 0; i < MAX_DEV_NUM; i++) {
