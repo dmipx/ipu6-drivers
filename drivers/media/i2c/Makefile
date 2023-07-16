@@ -7,6 +7,9 @@ endif
 
 ccflags-y += -I$(srcpath)/$(src)/../../../include/
 ccflags-y += -DCONFIG_VIDEO_D4XX_SERDES
+ifeq ($(CONFIG_VIDEO_INTEL_IPU6), m)
+	ccflags-y += -DCONFIG_VIDEO_INTEL_IPU6
+endif
 
 obj-$(CONFIG_VIDEO_AR0234) += ar0234.o
 obj-$(CONFIG_VIDEO_LT6911UXC) += lt6911uxc.o
