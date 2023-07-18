@@ -3260,9 +3260,8 @@ static short serdes_bus[4] = {5, 5, 5, 5};
 static short serdes_bus[4] = {2, 2, 4, 4};
 #endif
 module_param_array(serdes_bus, ushort, NULL, 0444);
-MODULE_PARM_DESC(serdes_bus, "max9295/6 deserializer i2c bus, "
-		"serdes_bus=muxa,muxb,muxc,muxd"
-		"default =2,2,4,4");
+MODULE_PARM_DESC(serdes_bus, "max9295/6 deserializer i2c bus\n"
+		"\t\tserdes_bus=2,2,4,4");
 
 // Deserializer addresses can be 0x40 0x48 0x4a
 #ifdef PLATFORM_AXIOMTEK
@@ -3271,9 +3270,9 @@ static unsigned short des_addr[4] = {0x48, 0x4a, 0x68, 0x6c};
 static unsigned short des_addr[4] = {0x48, 0x4a, 0x48, 0x4a};
 #endif
 module_param_array(des_addr, ushort, NULL, 0444);
-MODULE_PARM_DESC(des_addr, "max9296 deserializer i2c address, "
-		"ser_addr=muxa,muxb,muxc,muxd"
-		"default =0x48,0x4a,0x48,0x4a");
+MODULE_PARM_DESC(des_addr, "max9296 deserializer i2c address\n"
+		"\t\tdes_addr=0x48,0x4a,0x48,0x4a");
+
 
 static int ds5_i2c_addr_setting(struct i2c_client *c, struct ds5 *state)
 {
@@ -3283,9 +3282,9 @@ static int ds5_i2c_addr_setting(struct i2c_client *c, struct ds5 *state)
 	for (i = 0; i < 4; i++) {
 		if (c_bus == serdes_bus[i]) {
 			c->addr = des_addr[i];
-			dev_info(&c->dev, "Set max9296@%d-0x%x to link B\n",
+			dev_info(&c->dev, "Set max9296@%d-0x%x Link reset\n",
 					c_bus, c->addr);
-			ds5_write_8(state, 0x1000, 0x22); // move to link B
+			ds5_write_8(state, 0x1000, 0x40); // reset link
 		}
 	}
 	// restore original slave address
@@ -5505,25 +5504,25 @@ static int ds5_remove(struct i2c_client *c)
 			serdes_inited[i] = NULL;
 			mutex_lock(&serdes_lock__);
 
-                        ret = max9295_reset_control(state->ser_dev);
-                        if (ret)
-                            dev_warn(&c->dev,
-                                     "failed in 9295 reset control\n");
-                        ret = max9296_reset_control(state->dser_dev,
-                                                  state->g_ctx.s_dev);
-                        if (ret)
-                            dev_warn(&c->dev,
-                                     "failed in 9296 reset control\n");
+			ret = max9295_reset_control(state->ser_dev);
+			if (ret)
+				dev_warn(&c->dev,
+				  "failed in 9295 reset control\n");
+			ret = max9296_reset_control(state->dser_dev,
+				state->g_ctx.s_dev);
+			if (ret)
+				dev_warn(&c->dev,
+				  "failed in 9296 reset control\n");
 
-                        ret = max9295_sdev_unpair(state->ser_dev,
-                                                  state->g_ctx.s_dev);
-                        if (ret)
-                            dev_warn(&c->dev, "failed to unpair sdev\n");
-                        ret = max9296_sdev_unregister(state->dser_dev,
-                                                      state->g_ctx.s_dev);
-                        if (ret)
-                            dev_warn(&c->dev,
-                                     "failed to sdev unregister sdev\n");
+			ret = max9295_sdev_unpair(state->ser_dev,
+				state->g_ctx.s_dev);
+			if (ret)
+				dev_warn(&c->dev, "failed to unpair sdev\n");
+			ret = max9296_sdev_unregister(state->dser_dev,
+				state->g_ctx.s_dev);
+			if (ret)
+				dev_warn(&c->dev,
+				  "failed to sdev unregister sdev\n");
 			max9296_power_off(state->dser_dev);
 
 			mutex_unlock(&serdes_lock__);
