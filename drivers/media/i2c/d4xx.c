@@ -2340,11 +2340,10 @@ static int ds5_s_ctrl(struct v4l2_ctrl *ctrl)
 			dev_err(&state->client->dev, "invalid vc %d\n", vc_id);
 		else
 			d4xx_set_sub_stream[state->mux.last_set->mux_pad - 1] = on;
-
+		ret = 0;
 #ifndef CONFIG_VIDEO_D4XX_SERDES
 		ret = ds5_mux_s_stream(sd, on);
 #endif
-		ret = 0;
 		break;
 #endif
 	}
@@ -3351,6 +3350,11 @@ error:
 }
 
 #ifdef CONFIG_VIDEO_INTEL_IPU6
+static short sensor_vc[DS5_MUX_PAD_COUNT - 1] = {0,1,2,3, 2,3,0,1};
+module_param_array(sensor_vc, ushort, NULL, 0444);
+MODULE_PARM_DESC(sensor_vc, "VC set for sensors\n"
+		"\t\tsensor_vc=0,1,2,3,2,3,0,1");
+
 //#define PLATFORM_AXIOMTEK 1
 #ifdef PLATFORM_AXIOMTEK
 static short serdes_bus[4] = {5, 5, 5, 5};
@@ -4280,7 +4284,7 @@ static int ds5_mux_s_stream(struct v4l2_subdev *sd, int on)
 		if (sensor->pipe_id < 0) {
 			dev_err(&state->client->dev,
 				"No free pipe in max9296\n");
-			ret = sensor->pipe_id;
+			ret = -(ENOSR);
 			goto restore_s_state;
 		}
 #endif
@@ -5245,6 +5249,16 @@ static void ds5_substream_init(struct ds5 *state)
 {
 	int i;
 
+	pad_to_vc[DS5_MUX_PAD_EXTERNAL]= -1;
+	pad_to_vc[DS5_MUX_PAD_DEPTH]   = sensor_vc[0];
+	pad_to_vc[DS5_MUX_PAD_RGB]     = sensor_vc[1];
+	pad_to_vc[DS5_MUX_PAD_IR]      = sensor_vc[2];
+	pad_to_vc[DS5_MUX_PAD_IMU]     = sensor_vc[3];
+	pad_to_vc[DS5_MUX_PAD_DEPTH_B] = sensor_vc[4];
+	pad_to_vc[DS5_MUX_PAD_RGB_B]   = sensor_vc[5];
+	pad_to_vc[DS5_MUX_PAD_IR_B]    = sensor_vc[6];
+	pad_to_vc[DS5_MUX_PAD_IMU_B]   = sensor_vc[7];
+
 	/*
 	 * 0, vc 0, depth
 	 * 1, vc 0, meta data
@@ -5257,38 +5271,38 @@ static void ds5_substream_init(struct ds5 *state)
 	set_sub_stream_h(0, 480);
 	set_sub_stream_w(0, 640);
 	set_sub_stream_dt(0, mbus_code_to_mipi(MEDIA_BUS_FMT_UYVY8_1X16));
-	set_sub_stream_vc_id(0, 0);
+	set_sub_stream_vc_id(0, pad_to_vc[DS5_MUX_PAD_DEPTH]);
 
 	set_sub_stream_fmt(1, MEDIA_BUS_FMT_SGRBG8_1X8);
 	set_sub_stream_h(1, 1);
 	set_sub_stream_w(1, 68);
 	set_sub_stream_dt(1, MIPI_CSI2_TYPE_EMBEDDED8);
-	set_sub_stream_vc_id(1, 0);
+	set_sub_stream_vc_id(1, pad_to_vc[DS5_MUX_PAD_DEPTH]);
 
 	/*RGB*/
 	set_sub_stream_fmt(2, MEDIA_BUS_FMT_YUYV8_1X16);
 	set_sub_stream_h(2, 640);
 	set_sub_stream_w(2, 480);
 	set_sub_stream_dt(2, mbus_code_to_mipi(MEDIA_BUS_FMT_UYVY8_1X16));
-	set_sub_stream_vc_id(2, 1);
+	set_sub_stream_vc_id(2, pad_to_vc[DS5_MUX_PAD_RGB]);
 
 	set_sub_stream_fmt(3, MEDIA_BUS_FMT_SGRBG8_1X8);
 	set_sub_stream_h(3, 1);
 	set_sub_stream_w(3, 68);
 	set_sub_stream_dt(3, MIPI_CSI2_TYPE_EMBEDDED8);
-	set_sub_stream_vc_id(3, 1);
+	set_sub_stream_vc_id(3, pad_to_vc[DS5_MUX_PAD_RGB]);
 	/*IR*/
 	set_sub_stream_fmt(4, MEDIA_BUS_FMT_UYVY8_1X16);
 	set_sub_stream_h(4, 640);
 	set_sub_stream_w(4, 480);
 	set_sub_stream_dt(4, mbus_code_to_mipi(MEDIA_BUS_FMT_UYVY8_1X16));
-	set_sub_stream_vc_id(4, 2);
-
+	set_sub_stream_vc_id(4, pad_to_vc[DS5_MUX_PAD_IR]);
+	/*IMU*/
 	set_sub_stream_fmt(5, MEDIA_BUS_FMT_UYVY8_1X16);
 	set_sub_stream_h(5, 640);
 	set_sub_stream_w(5, 480);
 	set_sub_stream_dt(5, mbus_code_to_mipi(MEDIA_BUS_FMT_UYVY8_1X16));
-	set_sub_stream_vc_id(5, 3);
+	set_sub_stream_vc_id(5, pad_to_vc[DS5_MUX_PAD_IMU]);
 
 	/* aggreagated */
 	/*
@@ -5303,61 +5317,50 @@ static void ds5_substream_init(struct ds5 *state)
 	set_sub_stream_h    (6, 480);
 	set_sub_stream_w    (6, 640);
 	set_sub_stream_dt   (6, mbus_code_to_mipi(MEDIA_BUS_FMT_UYVY8_1X16));
-	set_sub_stream_vc_id(6, 2);
+	set_sub_stream_vc_id(6, pad_to_vc[DS5_MUX_PAD_DEPTH_B]);
 
 	set_sub_stream_fmt  (7, MEDIA_BUS_FMT_SGRBG8_1X8);
 	set_sub_stream_h    (7, 1);
 	set_sub_stream_w    (7, 68);
 	set_sub_stream_dt   (7, MIPI_CSI2_TYPE_EMBEDDED8);
-	set_sub_stream_vc_id(7, 2);
+	set_sub_stream_vc_id(7, pad_to_vc[DS5_MUX_PAD_DEPTH_B]);
 
 	/*RGB*/
 	set_sub_stream_fmt  (8, MEDIA_BUS_FMT_YUYV8_1X16);
 	set_sub_stream_h    (8, 640);
 	set_sub_stream_w    (8, 480);
 	set_sub_stream_dt   (8, mbus_code_to_mipi(MEDIA_BUS_FMT_UYVY8_1X16));
-	set_sub_stream_vc_id(8, 3);
+	set_sub_stream_vc_id(8, pad_to_vc[DS5_MUX_PAD_RGB_B]);
 
 	set_sub_stream_fmt  (9, MEDIA_BUS_FMT_SGRBG8_1X8);
 	set_sub_stream_h    (9, 1);
 	set_sub_stream_w    (9, 68);
 	set_sub_stream_dt   (9, MIPI_CSI2_TYPE_EMBEDDED8);
-	set_sub_stream_vc_id(9, 3);
+	set_sub_stream_vc_id(9, pad_to_vc[DS5_MUX_PAD_RGB_B]);
 	/*IR*/
 	set_sub_stream_fmt(10, MEDIA_BUS_FMT_UYVY8_1X16);
 	set_sub_stream_h(10, 640);
 	set_sub_stream_w(10, 480);
 	set_sub_stream_dt(10, mbus_code_to_mipi(MEDIA_BUS_FMT_UYVY8_1X16));
-	set_sub_stream_vc_id(10, 0);
+	set_sub_stream_vc_id(10, pad_to_vc[DS5_MUX_PAD_IR_B]);
 	/*IMU*/
 	set_sub_stream_fmt(11, MEDIA_BUS_FMT_UYVY8_1X16);
 	set_sub_stream_h(11, 640);
 	set_sub_stream_w(11, 480);
 	set_sub_stream_dt(11, mbus_code_to_mipi(MEDIA_BUS_FMT_UYVY8_1X16));
-	set_sub_stream_vc_id(11, 1);
+	set_sub_stream_vc_id(11, pad_to_vc[DS5_MUX_PAD_IMU_B]);
 
 	for (i = 0; i < DS5_MUX_PAD_COUNT; i++)
 		pad_to_substream[i] = -1;
-
-	pad_to_substream[DS5_MUX_PAD_DEPTH] = 0;
-	pad_to_substream[DS5_MUX_PAD_RGB] = 2;
-	pad_to_substream[DS5_MUX_PAD_IR] = 4;
-	pad_to_substream[DS5_MUX_PAD_IMU] = 5;
+	/* match for IPU6 CSI2 BE SOC video capture pads */
+	pad_to_substream[DS5_MUX_PAD_DEPTH]   = 0;
+	pad_to_substream[DS5_MUX_PAD_RGB]     = 2;
+	pad_to_substream[DS5_MUX_PAD_IR]      = 4;
+	pad_to_substream[DS5_MUX_PAD_IMU]     = 5;
 	pad_to_substream[DS5_MUX_PAD_DEPTH_B] = 6;
-	pad_to_substream[DS5_MUX_PAD_RGB_B] = 8;
-	pad_to_substream[DS5_MUX_PAD_IR_B] = 10;
-	pad_to_substream[DS5_MUX_PAD_IMU_B] = 11;
-
-	pad_to_vc[DS5_MUX_PAD_EXTERNAL]= -1;
-	pad_to_vc[DS5_MUX_PAD_DEPTH]   = 0;
-	pad_to_vc[DS5_MUX_PAD_RGB]     = 1;
-	pad_to_vc[DS5_MUX_PAD_IR]      = 2;
-	pad_to_vc[DS5_MUX_PAD_IMU]     = 3;
-	pad_to_vc[DS5_MUX_PAD_DEPTH_B] = 2;
-	pad_to_vc[DS5_MUX_PAD_RGB_B]   = 3;
-	pad_to_vc[DS5_MUX_PAD_IR_B]    = 0;
-	pad_to_vc[DS5_MUX_PAD_IMU_B]   = 1;
-
+	pad_to_substream[DS5_MUX_PAD_RGB_B]   = 8;
+	pad_to_substream[DS5_MUX_PAD_IR_B]    = 10;
+	pad_to_substream[DS5_MUX_PAD_IMU_B]   = 11;
 }
 #endif
 
