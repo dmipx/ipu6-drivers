@@ -345,6 +345,14 @@ static int csi2_link_validate(struct media_link *link)
 	    to_ipu_isys_csi2(media_entity_to_v4l2_subdev(link->sink->entity));
 
 	ip = to_ipu_isys_pipeline(media_pipe);
+	if (ip && ip->external && ip->external->entity) {
+		if (ip->external == link->source) {
+			dev_dbg(&csi2->isys->adev->dev, "%s:%d: ip external entity: %s link source: %s ip->vc: %d proceed with validation\n", __func__,  __LINE__, ip->external->entity->name, link->source->entity->name, ip->vc);
+		} else {
+			dev_dbg(&csi2->isys->adev->dev, "%s:%d: ip external entity: %s link source: %s ip->vc: %d skip validation\n", __func__,  __LINE__, ip->external->entity->name, link->source->entity->name, ip->vc);
+			return 0;
+		}
+	}
 	csi2->receiver_errors = 0;
 	ip->csi2 = csi2;
 	ipu_isys_video_add_capture_done(ip, csi2_capture_done);

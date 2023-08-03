@@ -183,7 +183,7 @@ static int media_pipeline_enumerate_by_vc_cb(
 	};
 
 	if (!source_pad) {
-		dev_err(entity->graph_obj.mdev->dev, "no remote pad found\n");
+		dev_err(entity->graph_obj.mdev->dev, "%s:%d no remote pad found\n", __func__, __LINE__);
 		kfree(ip);
 		return ret;
 	}
@@ -882,6 +882,7 @@ static int vidioc_s_fmt_vid_cap_mplane(struct file *file, void *fh,
 	struct media_pad *source_pad = media_entity_remote_pad(&av->pad);
 	struct media_pad *remote_pad = source_pad;
 	struct v4l2_subdev *sd = NULL;
+	struct ipu_isys_pipeline *ip;
 
 	if (av->aq.vbq.streaming)
 		return -EBUSY;
@@ -910,6 +911,10 @@ static int vidioc_s_fmt_vid_cap_mplane(struct file *file, void *fh,
 		ret = media_pipeline_enumerate_by_vc_cb(av, ipu_isys_set_fmt_subdev, &fmt);
 		if (ret)
 			return -EINVAL;
+		ip = &av->ip;
+		if (!(ip && ip->external && ip->external->entity)) {
+			ret = ipu_isys_query_sensor_info(source_pad, ip);
+		}
 
 		/* set format for CSI-2 and CSI2 BE SOC  */
 	do {
@@ -921,13 +926,17 @@ static int vidioc_s_fmt_vid_cap_mplane(struct file *file, void *fh,
 					IPU_ISYS_ENTITY_PREFIX " CSI",
 					strlen(IPU_ISYS_ENTITY_PREFIX " CSI")) != 0)){
 		dev_dbg(remote_pad->entity->graph_obj.mdev->dev,
-				"It finds: %s will set and break\n", remote_pad->entity->name);
-		sd = media_entity_to_v4l2_subdev(remote_pad->entity);
+				"It finds: %s for %d will set and break\n", remote_pad->entity->name,source_pad->index);
+		if(ip->external && ip->external->entity) {
+			sd = media_entity_to_v4l2_subdev(ip->external->entity);
+		} else {
+			sd = media_entity_to_v4l2_subdev(remote_pad->entity);
+		}
 		ret = ipu_isys_set_fmt_subdev(av, sd, &fmt);
 			break;
 		}
 		dev_dbg(remote_pad->entity->graph_obj.mdev->dev,
-				"It finds: %s\n", remote_pad->entity->name);
+				"It finds: %s for %d\n", remote_pad->entity->name, source_pad->index);
 		sd = media_entity_to_v4l2_subdev(remote_pad->entity);
 		ret = ipu_isys_set_fmt_subdev(av, sd, &fmt);
 
@@ -1091,6 +1100,8 @@ static int link_validate(struct media_link *link)
 #endif
 		ip->source = to_ipu_isys_subdev(sd)->source;
 	}
+	if (ip->external && ip->external->entity)
+		dev_dbg(&av->isys->adev->dev, "%s:%d: sd:%s ip->external: %s ip->vc: %d ip->nr_queues:%d->%d\n", __func__,  __LINE__, sd->name, ip->external->entity->name, ip->vc, ip->nr_queues, ip->nr_queues+1);
 
 	ip->nr_queues++;
 
@@ -1443,7 +1454,7 @@ static int ipu_isys_query_sensor_info(struct media_pad *source_pad,
 	struct media_pad *extern_pad = NULL;
 	struct v4l2_subdev *sd = NULL;
 	struct v4l2_querymenu qm = {.id = V4L2_CID_IPU_QUERY_SUB_STREAM, };
-
+	struct media_link *link;
 	while ((remote_pad =
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0)
 		media_entity_remote_pad(&remote_pad->entity->pads[0])
@@ -1484,7 +1495,23 @@ static int ipu_isys_query_sensor_info(struct media_pad *source_pad,
 			"It doesn't find extern entity\n");
 		return -ENOLINK;
 	}
-
+	/* scan enabled link external entities */
+	list_for_each_entry(link, &remote_pad->entity->links, list) {
+		if (!(link->flags & MEDIA_LNK_FL_ENABLED))
+			continue;
+		if(!link->source)
+			continue;
+		if (strncmp(link->source->entity->name,
+		    IPU_ISYS_CSI2_ENTITY_PREFIX,
+		    strlen(IPU_ISYS_CSI2_ENTITY_PREFIX)) == 0)
+			continue;
+		sd = media_entity_to_v4l2_subdev(link->source->entity);
+		if (!sd) {
+			dev_dbg(source_pad->entity->graph_obj.mdev->dev,
+				"It doesn't find extern entity\n");
+			return -ENOLINK;
+		}
+	
 	/* Get the sub stream info and set the current pipe's vc id */
 	for (i = 0; i < CSI2_BE_SOC_SOURCE_PADS_NUM; i++) {
 		/*
@@ -1507,7 +1534,8 @@ static int ipu_isys_query_sensor_info(struct media_pad *source_pad,
 			(pad_id - NR_OF_CSI2_BE_SOC_SINK_PADS)) {
 			ip->vc = ip->asv[qm.index].vc;
 			flag = true;
-			// pr_info("The current entityvc:id:%d for: %s\n", ip->vc, sd->name);
+			ip->external = link->source;
+			pr_debug("The current entityvc:id:%d pad_id: %d, substream %d, for: %s, set ip->external\n", ip->vc, pad_id, ip->asv[qm.index].substream, sd->name);
 		}
 		dev_dbg(source_pad->entity->graph_obj.mdev->dev,
 			"dentity vc:%d, dt:%x, substream:%d\n",
@@ -1517,6 +1545,7 @@ static int ipu_isys_query_sensor_info(struct media_pad *source_pad,
 
 	if (flag)
 		return 0;
+	}
 
 	return ret;
 }
@@ -1546,9 +1575,10 @@ static int media_pipeline_walk_by_vc(struct ipu_isys_video *av,
 	int entity_vc = INVALIA_VC_ID;
 	u32 n;
 	bool is_vc = false;
+	unsigned int av_pad_id = source_pad->index;
 
 	if (!source_pad) {
-		dev_err(entity->graph_obj.mdev->dev, "no remote pad found\n");
+		dev_err(entity->graph_obj.mdev->dev, "%s:%d no remote pad found\n", __func__, __LINE__);
 		return ret;
 	}
 
@@ -1614,7 +1644,7 @@ static int media_pipeline_walk_by_vc(struct ipu_isys_video *av,
 #endif
 			if (!source_pad) {
 				dev_warn(entity->graph_obj.mdev->dev,
-					 "no remote pad found\n");
+					"%s:%d no remote pad found\n", __func__, __LINE__);
 				continue;
 			}
 			pad_id = source_pad->index;
@@ -1628,6 +1658,14 @@ static int media_pipeline_walk_by_vc(struct ipu_isys_video *av,
 
 			if (entity_vc != ip->vc)
 				continue;
+			if (ip->asv[i].substream == av_pad_id)
+				pr_info("METADATA VC :%d substream:%d, srcpad:%d\n", entity_vc, ip->asv[i].substream, av_pad_id);
+
+			if ((ip->asv[i].substream != (av_pad_id - 1)) &&
+				(ip->asv[i].substream != av_pad_id)) {
+				pr_info("SKIP VC:%d substream:%d, srcpad:%d\n", entity_vc, ip->asv[i].substream, av_pad_id);
+				continue;
+			}
 		}
 
 		entity->pipe = pipe;
@@ -1661,10 +1699,13 @@ static int media_pipeline_walk_by_vc(struct ipu_isys_video *av,
 			if (link->sink != pad ||
 			    !(link->flags & MEDIA_LNK_FL_ENABLED))
 				continue;
+			dev_dbg(entity->graph_obj.mdev->dev,
+				"%s:%d: calling link_validate entity->name: %s \n",
+				__func__,  __LINE__, entity->name);
 
 			ret = entity->ops->link_validate(link);
 			if (ret < 0 && ret != -ENOIOCTLCMD) {
-				dev_dbg(entity->graph_obj.mdev->dev,
+				dev_warn(entity->graph_obj.mdev->dev,
 					"link failed for %s:%u->%s:%u,ret:%d\n",
 					link->source->entity->name,
 					link->source->index,
@@ -1773,7 +1814,7 @@ static int media_pipeline_walk_by_vc(struct ipu_isys_video *av,
 	bool is_vc = false;
 
 	if (!source_pad) {
-		dev_err(entity->graph_obj.mdev->dev, "no remote pad found\n");
+		dev_err(entity->graph_obj.mdev->dev, "%s:%d no remote pad found\n", __func__, __LINE__);
 		return ret;
 	}
 
@@ -1827,7 +1868,7 @@ static int media_pipeline_walk_by_vc(struct ipu_isys_video *av,
 
 			if (!source_pad) {
 				dev_warn(entity->graph_obj.mdev->dev,
-					 "no remote pad found\n");
+					"%s:%d no remote pad found\n", __func__, __LINE__);
 				continue;
 			}
 			pad_id = source_pad->index;
@@ -1960,7 +2001,7 @@ ipu_isys_prepare_fw_cfg_default(struct ipu_isys_video *av,
 	unsigned int sub_stream_id;
 
 	if (!source_pad) {
-		dev_err(&av->isys->adev->dev, "no remote pad found\n");
+		dev_err(&av->isys->adev->dev, "%s:%d no remote pad found\n", __func__, __LINE__);
 		return;
 	}
 
@@ -2535,6 +2576,9 @@ dev_warn(dev, "prepare stream: state:%d nr_queues:%d->0\n", state, ip->nr_queues
 		dev_dbg(dev, "pipeline start failed\n");
 		goto out_enum_cleanup;
 	}
+	if(ip->external && ip->external->entity)
+		dev_dbg(dev, "ip->external: %s\n",
+			ip->external->entity->name);
 
 	if (!ip->external) {
 		dev_err(dev, "no external entity set! Driver bug?\n");
@@ -2634,18 +2678,20 @@ int ipu_isys_video_set_streaming(struct ipu_isys_video *av,
 		if (!v4l2_query_ext_ctrl(esd->ctrl_handler, &qm_ctrl)) {
 			c.value64 = SUB_STREAM_SET_VALUE(ip->vc, state);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)
-			v4l2_s_ext_ctrls(NULL, esd->ctrl_handler,
+			rval = v4l2_s_ext_ctrls(NULL, esd->ctrl_handler,
 					 esd->devnode,
 					 esd->v4l2_dev->mdev,
 					 &cs);
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(4, 20, 0)
-			v4l2_s_ext_ctrls(NULL, esd->ctrl_handler,
+			rval = v4l2_s_ext_ctrls(NULL, esd->ctrl_handler,
 					 esd->v4l2_dev->mdev,
 					 &cs);
 #endif
 		} else {
-			v4l2_subdev_call(esd, video, s_stream, state);
+			rval = v4l2_subdev_call(esd, video, s_stream, state);
 		}
+		if (rval)
+			goto out_media_entity_graph_init;
 		if (av->enum_link_state == IPU_ISYS_LINK_STATE_DONE || \
 			av->enum_link_state == IPU_ISYS_LINK_STATE_MD)
 			rval = v4l2_subdev_call(esd, video, s_stream, state);
@@ -2722,8 +2768,11 @@ int ipu_isys_video_set_streaming(struct ipu_isys_video *av,
 		if (rval)
 			goto out_media_entity_stop_streaming_firmware;
 		if (av->enum_link_state == IPU_ISYS_LINK_STATE_DONE || \
-			av->enum_link_state == IPU_ISYS_LINK_STATE_MD)
+			av->enum_link_state == IPU_ISYS_LINK_STATE_MD) {
 			rval = v4l2_subdev_call(esd, video, s_stream, state);
+			if (rval)
+				goto out_media_entity_stop_streaming_firmware;
+		}
 	} else {
 		close_streaming_firmware(av);
 		av->ip.vc = INVALIA_VC_ID;
@@ -2770,6 +2819,7 @@ out_media_entity_stop_streaming:
 
 out_media_entity_graph_init:
 	media_graph_walk_cleanup(&ip->graph);
+	dev_err(dev, "stream on for %s failed: %d\n", ip->external->entity->name, rval);
 
 	return rval;
 }
