@@ -1910,6 +1910,8 @@ static int ds5_send_hwmc(struct ds5 *state,
 					"%s(): HWMC failed, ret: %d, status: %x, error code: %d\n",
 					__func__, ret, status, errorCode);
 				ret = -EPROTO;
+				break;
+		}
 	}
 
 	if (isRead && dataLen && status == DS5_HWMC_STATUS_OK) {
