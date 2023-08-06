@@ -1868,8 +1868,9 @@ static int ds5_send_hwmc(struct ds5 *state,
 	} while (iter-- && status == DS5_HWMC_STATUS_WIP);
 
 	if (ret || status != DS5_HWMC_STATUS_OK) {
-		ds5_raw_read(state, 0x4900, &errorCode, 4);
-		switch(errorCode) {
+		if (status == DS5_HWMC_STATUS_ERR) {
+			ds5_raw_read(state, 0x4900, &errorCode, 4);
+			switch(errorCode) {
 			case (DS5_HWMC_ERR_CMD):
 			case (DS5_HWMC_ERR_PARAM):
 				ret = -EBADMSG;
@@ -1884,6 +1885,7 @@ static int ds5_send_hwmc(struct ds5 *state,
 					__func__, ret, status, errorCode);
 				ret = -EPROTO;
 				break;
+			}
 		}
 	}
 
