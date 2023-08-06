@@ -3577,16 +3577,10 @@ static int ds5_ctrl_init(struct ds5 *state, int sid)
 		ctrls->link_freq->flags |= V4L2_CTRL_FLAG_READ_ONLY;
 
 	
-	// ctrls->query_sub_stream = v4l2_ctrl_new_custom(hdl, &d4xx_controls_q_sub_stream, sensor);
 	if (state->aggregated)
-	ctrls->query_sub_stream = v4l2_ctrl_new_custom(hdl, &d4xx_controls_q_sub_stream_agg, sensor);
-		// v4l2_ctrl_modify_range(ctrls->query_sub_stream, ARRAY_SIZE(d4xx_query_sub_stream)/2, (ARRAY_SIZE(d4xx_query_sub_stream) - 1), 0, ARRAY_SIZE(d4xx_query_sub_stream)/2);
-		// if(v4l2_ctrl_modify_range(ctrls->query_sub_stream, ARRAY_SIZE(d4xx_query_sub_stream)/2, (ARRAY_SIZE(d4xx_query_sub_stream) - 1), 1, ARRAY_SIZE(d4xx_query_sub_stream)/2))
-		// v4l2_err(sd, "error creating v4l2_ctrl_modify_range (%d)\n", hdl->error);
+		ctrls->query_sub_stream = v4l2_ctrl_new_custom(hdl, &d4xx_controls_q_sub_stream_agg, sensor);
 	else
-	ctrls->query_sub_stream = v4l2_ctrl_new_custom(hdl, &d4xx_controls_q_sub_stream, sensor);
-		// if(v4l2_ctrl_modify_range(ctrls->query_sub_stream, 0, (ARRAY_SIZE(d4xx_query_sub_stream)/2 - 1), 1, 0))
-		// 		v4l2_err(sd, "error creating v4l2_ctrl_modify_range (%d)\n", hdl->error);
+		ctrls->query_sub_stream = v4l2_ctrl_new_custom(hdl, &d4xx_controls_q_sub_stream, sensor);
 
 
 	if (ctrls->query_sub_stream)
