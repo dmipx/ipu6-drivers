@@ -40,7 +40,7 @@
 #include "ipu-platform-buttress-regs.h"
 
 #define ISYS_PM_QOS_VALUE	300
-#if IS_ENABLED(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
+#if defined(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
 /*
  * The param was passed from module to indicate if port
  * could be optimized.
@@ -269,7 +269,7 @@ static int ipu_pipeline_link_notify(struct media_link *link, u32 flags,
 /* END adapted code from drivers/media/platform/omap3isp/isp.c */
 #endif /* < v4.6 */
 
-#if IS_ENABLED(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
+#if defined(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
 struct isys_i2c_test {
 	u8 bus_nr;
 	u16 addr;
@@ -347,7 +347,7 @@ skip_unregister_subdev:
 	v4l2_device_unregister_subdev(sd);
 	return rval;
 }
-#if IS_ENABLED(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
+#if defined(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
 static int isys_register_ext_subdev(struct ipu_isys *isys,
 				    struct ipu_isys_subdev_info *sd_info)
 {
@@ -513,7 +513,7 @@ static int isys_register_subdevices(struct ipu_isys *isys)
 	const struct ipu_isys_internal_csi2_pdata *csi2 =
 	    &isys->pdata->ipdata->csi2;
 	struct ipu_isys_csi2_be_soc *csi2_be_soc;
-#if IS_ENABLED(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
+#if defined(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
 	struct ipu_isys_subdev_pdata *spdata = isys->pdata->spdata;
 	struct ipu_isys_subdev_info **sd_info;
 	DECLARE_BITMAP(csi2_enable, 32);
@@ -521,7 +521,7 @@ static int isys_register_subdevices(struct ipu_isys *isys)
 	unsigned int i, k;
 	int rval;
 
-#if IS_ENABLED(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
+#if defined(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
 	/*
 	 * Here is somewhat a workaround, let each platform decide
 	 * if csi2 port can be optimized, which means only registered
@@ -552,7 +552,7 @@ static int isys_register_subdevices(struct ipu_isys *isys)
 	}
 
 	for (i = 0; i < csi2->nports; i++) {
-#if IS_ENABLED(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
+#if defined(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
 		if (!test_bit(i, csi2_enable))
 			continue;
 #endif
@@ -583,7 +583,7 @@ static int isys_register_subdevices(struct ipu_isys *isys)
 	}
 
 	for (i = 0; i < csi2->nports; i++) {
-#if IS_ENABLED(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
+#if defined(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
 		if (!test_bit(i, csi2_enable))
 			continue;
 #endif
@@ -853,7 +853,7 @@ out_media_device_unregister:
 static void isys_unregister_devices(struct ipu_isys *isys)
 {
 	isys_unregister_subdevices(isys);
-#if IS_ENABLED(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
+#if defined(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
 	isys_unregister_ext_subdevs(isys);
 #endif
 	v4l2_device_unregister(&isys->v4l2_dev);
@@ -1049,6 +1049,109 @@ static void isys_remove(struct ipu_bus_device *adev)
 }
 
 #ifdef CONFIG_DEBUG_FS
+#if defined(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
+#include <media/ipu-acpi-pdata.h>
+/* use as such:
+echo "1 2 d4xx 1 0x16 0x44 0x4a" | sudo tee /sys/kernel/debug/intel-ipu6/isys/new_device
+*/
+static ssize_t ipu_isys_new_device_set(struct file *flip,
+		const char __user *buffer, size_t len, loff_t *offset)
+{
+	struct ipu_isys *isys = flip->f_inode->i_private;
+
+	int res, ret;
+	int port, lanes, adapter, sens, ser, des;
+	char name[I2C_NAME_SIZE], end;
+	char buf[128];
+	struct serdes_subdev_info *serdes_sdinfo;
+	struct serdes_platform_data *pdata;
+	// struct sensor_platform_data *pdata;
+	struct ipu_isys_subdev_info *sd_info;
+	struct ipu_isys_csi2_config *csi2_config;
+
+	csi2_config = kzalloc(sizeof(*csi2_config), GFP_KERNEL);
+	if (!csi2_config)
+		return -ENOMEM;
+	(void)offset;
+
+	if (copy_from_user(buf, buffer, len)) {
+		pr_err("copy_from_user failed\n");
+		return 0;
+	}
+	sd_info = kzalloc(sizeof(*sd_info), GFP_KERNEL);
+	if (!sd_info)
+		return -ENOMEM;
+	pdata = kzalloc(sizeof(*pdata), GFP_KERNEL);
+	if (!pdata)
+		return -ENOMEM;
+	serdes_sdinfo = kzalloc(sizeof(*serdes_sdinfo), GFP_KERNEL);
+	if (!serdes_sdinfo)
+		return -ENOMEM;
+
+	buf[len] = 0;
+	if (isys && isys->adev && &isys->adev->dev)
+		dev_info(&isys->adev->dev, "isys_new_device_set function running val:%s\n", buf);
+	res = sscanf(buf, "%d %d %s %d 0x%02x 0x%02x 0x%02x%c", &port, &lanes, name, &adapter, &sens, &ser, &des, &end);
+	if (res != 8 && end != '\n') {
+		dev_err(NULL, "%s: Extra parameters\n", "new_device");
+		return -EINVAL;
+	}
+	dev_info(&isys->adev->dev, "res:%d, port:%d, lanes:%d, name:%s, adapter:%d, sens:0x%02x, ser:0x%02x, des:0x%02x\n", res,port, lanes, name, adapter, sens, ser, des);
+
+	pdata->suffix = port + 'a';
+
+	serdes_sdinfo->ser_alias = ser;
+	serdes_sdinfo->board_info.addr = des;
+	// strlcpy(serdes_sdinfo->board_info.type, name, I2C_NAME_SIZE);
+
+
+	pdata->subdev_num = 1;
+	pdata->subdev_info = serdes_sdinfo;
+
+	sd_info->i2c.i2c_adapter_id = adapter;
+	csi2_config->nlanes = lanes;
+	csi2_config->port = port;
+	sd_info->csi2 = csi2_config;
+	strlcpy(sd_info->i2c.board_info.type, name, I2C_NAME_SIZE);
+	strlcpy(sd_info->i2c.i2c_adapter_bdf, "0000:00:15.1", sizeof(sd_info->i2c.i2c_adapter_bdf));
+
+	sd_info->i2c.board_info.addr = sens;
+	sd_info->i2c.board_info.platform_data = pdata;
+
+	isys_register_ext_subdev(isys, sd_info);
+    return len;
+}
+
+static ssize_t ipu_isys_new_device_get(struct file *flip,
+		char __user *buffer, size_t len, loff_t *offset)
+{
+	struct ipu_isys *isys = flip->f_inode->i_private;
+	char msg[256] = {0};
+	static int once = 0;
+	int ret;
+
+	ret = snprintf(msg, sizeof(msg), "IPU CSI2 new device binding\n"
+		"<csi port> <lanes> <device name> <i2c adapter> <sensor i2c> <ser i2c> <des i2c>\n");
+	if (copy_to_user(buffer, msg, strlen(msg))) {
+		dev_err(&isys->adev->dev, "copy_to_user failed\n");
+		ret = -EFAULT;
+	} else {
+		dev_info(&isys->adev->dev, "ipu_isys_new_device_get ret:%d, msg:%d\n", ret,strlen(msg));
+		once = ~once;
+		ret = strlen(msg) & once;
+	}
+	return ret;
+}
+// DEFINE_SIMPLE_ATTRIBUTE(isys_new_device_fops,
+// 			ipu_isys_new_device_get,
+// 			ipu_isys_new_device_set, "%llu\n");
+
+static const struct file_operations isys_new_device_fops = {
+	.read = &ipu_isys_new_device_get,
+	.write = &ipu_isys_new_device_set,
+};
+#endif
+
 static int ipu_isys_icache_prefetch_get(void *data, u64 *val)
 {
 	struct ipu_isys *isys = data;
@@ -1089,7 +1192,12 @@ static int ipu_isys_init_debugfs(struct ipu_isys *isys)
 				   dir, isys, &isys_icache_prefetch_fops);
 	if (IS_ERR(file))
 		goto err;
-
+#if defined(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
+	debugfs_create_file("new_device", 0600,
+				   dir, isys, &isys_new_device_fops);
+	// if (IS_ERR(file))
+		// goto err;
+#endif
 	isys->debugfsdir = dir;
 
 #ifdef IPU_ISYS_GPC
