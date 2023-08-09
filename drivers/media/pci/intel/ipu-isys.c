@@ -1093,7 +1093,7 @@ static ssize_t ipu_isys_new_device_set(struct file *flip,
 		dev_info(&isys->adev->dev, "isys_new_device_set function running val:%s\n", buf);
 	res = sscanf(buf, "%d %d %s %d 0x%02x 0x%02x 0x%02x%c", &port, &lanes, name, &adapter, &sens, &ser, &des, &end);
 	if (res != 8 && end != '\n') {
-		dev_err(NULL, "%s: Extra parameters\n", "new_device");
+		dev_err(NULL, "%s: Incorrect parameters\n", "new_device");
 		return -EINVAL;
 	}
 	dev_info(&isys->adev->dev, "res:%d, port:%d, lanes:%d, name:%s, adapter:%d, sens:0x%02x, ser:0x%02x, des:0x%02x\n",
