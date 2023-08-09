@@ -1516,7 +1516,7 @@ static int ipu_isys_query_sensor_info(struct media_pad *source_pad,
 				"It doesn't find extern entity\n");
 			return -ENOLINK;
 		}
-	
+
 	/* Get the sub stream info and set the current pipe's vc id */
 	for (i = 0; i < CSI2_BE_SOC_SOURCE_PADS_NUM; i++) {
 		/*

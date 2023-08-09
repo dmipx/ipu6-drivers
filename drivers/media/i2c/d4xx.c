@@ -3106,7 +3106,7 @@ static int ds5_board_setup(struct ds5 *state)
 		I2C_BOARD_INFO("max9295", 0x42),
 		.platform_data = &max9295_pdata,
 	};
-	
+
 	i2c_info_ser.addr = pdata->subdev_info[0].ser_alias; //0x42, 0x44, 0x62, 0x64
 	state->ser_i2c = i2c_new_client_device(adapter, &i2c_info_ser);
 
@@ -3116,10 +3116,10 @@ static int ds5_board_setup(struct ds5 *state)
 	for (i = 0; i < MAX_DEV_NUM; i++) {
 		if (serdes_inited[i] && serdes_inited[i]->dser_i2c) {
 			dev_info(dev, "MAX9296 found device on %d@0x%x\n",
-				serdes_inited[i]->dser_i2c->adapter->nr, serdes_inited[i]->dser_i2c->addr);	
-			if (bus == serdes_inited[i]->dser_i2c->adapter->nr 
+				serdes_inited[i]->dser_i2c->adapter->nr, serdes_inited[i]->dser_i2c->addr);
+			if (bus == serdes_inited[i]->dser_i2c->adapter->nr
 				&& serdes_inited[i]->dser_i2c->addr == i2c_info_des.addr) {
-				dev_info(dev, "MAX9296 AGGREGATION found device on 0x%x\n", i2c_info_des.addr);	
+				dev_info(dev, "MAX9296 AGGREGATION found device on 0x%x\n", i2c_info_des.addr);
 				state->dser_i2c = serdes_inited[i]->dser_i2c;
 				state->aggregated = 1;
 			}
@@ -5163,7 +5163,7 @@ static void ds5_substream_init(struct ds5 *state)
 		state->pad_to_vc[DS5_MUX_PAD_IR]    = sensor_vc[6];
 		state->pad_to_vc[DS5_MUX_PAD_IMU]   = sensor_vc[7];
 	}
-	
+
 	for (i = 0; i < ARRAY_SIZE(state->pad_to_substream); i++)
 		state->pad_to_substream[i] = -1;
 	/* match for IPU6 CSI2 BE SOC video capture pads */
