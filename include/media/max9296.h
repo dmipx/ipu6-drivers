@@ -35,6 +35,11 @@
  * @ingroup serdes_group
  * @{
  */
+struct max9296_pdata {
+	bool splitter_enabled;
+	__u32 max_src;
+	__u32 csi_mode;
+};
 
 int max9296_get_available_pipe_id(struct device *dev, int vc_id);
 int max9296_set_pipe(struct device *dev, int pipe_id, u8 data_type1,

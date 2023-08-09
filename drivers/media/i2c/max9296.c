@@ -371,7 +371,7 @@ int max9296_setup_control(struct device *dev, struct device *s_dev)
 	priv->sdev_ref++;
 
 	/* Reset splitter mode if all devices are not found */
-	if ((priv->sdev_ref == priv->max_src) &&
+	if ((priv->sdev_ref != priv->max_src) &&
 		(priv->splitter_enabled == true) &&
 		(priv->num_src_found > 0U) &&
 		(priv->num_src_found < priv->max_src)) {
@@ -1049,12 +1049,29 @@ static int max9296_parse_dt(struct max9296 *priv,
 static int max9296_parse_pdata(struct max9296 *priv,
 				struct i2c_client *client)
 {
-	priv->csi_mode = MAX9296_CSI_MODE_2X4;
-	priv->lane_mp1 = MAX9296_LANE_MAP1_2X4;
-	priv->lane_mp2 = MAX9296_LANE_MAP2_2X4;
-	priv->max_src = 1;
-	priv->reset_gpio = 0;
-	priv->vdd_cam_1v2 = NULL;
+	struct max9296_pdata *pdata = client->dev.platform_data;
+	if (pdata) {
+		if (pdata->csi_mode == GMSL_CSI_2X4_MODE) {
+			priv->csi_mode = MAX9296_CSI_MODE_2X4;
+			priv->lane_mp1 = MAX9296_LANE_MAP1_2X4;
+			priv->lane_mp2 = MAX9296_LANE_MAP2_2X4;
+		} else if (pdata->csi_mode == GMSL_CSI_4X2_MODE) {
+			priv->csi_mode = MAX9296_CSI_MODE_4X2;
+			priv->lane_mp1 = MAX9296_LANE_MAP1_4X2;
+			priv->lane_mp2 = MAX9296_LANE_MAP2_4X2;
+		} else {
+			dev_err(&client->dev, "invalid csi mode\n");
+			return -EINVAL;
+		}
+		priv->max_src = pdata->max_src;
+	} else {
+		priv->csi_mode = MAX9296_CSI_MODE_2X4;
+		priv->lane_mp1 = MAX9296_LANE_MAP1_2X4;
+		priv->lane_mp2 = MAX9296_LANE_MAP2_2X4;
+		priv->max_src = 1;
+		priv->reset_gpio = 0;
+		priv->vdd_cam_1v2 = NULL;
+	}
 	return 0;
 }
 

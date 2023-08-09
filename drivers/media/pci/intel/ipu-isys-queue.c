@@ -323,9 +323,10 @@ static int buffer_list_get(struct ipu_isys_pipeline *ip,
 		if (list_empty(&aq->incoming)) {
 			spin_unlock_irqrestore(&aq->lock, flags);
 			ret = -ENODATA;
-dev_warn(&ip->isys->adev->dev, "%s:%d %s: list_empty(&aq->incoming) ENODATA\n",
-__func__, __LINE__,
-container_of(ip, struct ipu_isys_video, ip)->vdev.name);
+			dev_dbg(&ip->isys->adev->dev,
+				"%s:%d %s: list_empty(&aq->incoming) ENODATA\n",
+				__func__, __LINE__,
+				container_of(ip, struct ipu_isys_video, ip)->vdev.name);
 			goto error;
 		}
 
@@ -334,9 +335,6 @@ container_of(ip, struct ipu_isys_video, ip)->vdev.name);
 		if (ib->req) {
 			spin_unlock_irqrestore(&aq->lock, flags);
 			ret = -ENODATA;
-dev_warn(&ip->isys->adev->dev, "%s:%d %s: ib->req ENODATA\n",
-__func__, __LINE__,
-container_of(ip, struct ipu_isys_video, ip)->vdev.name);
 
 			goto error;
 		}
@@ -556,7 +554,7 @@ static void buf_queue(struct vb2_buffer *vb)
 	unsigned int i;
 	int rval;
 
-	dev_dbg(&av->isys->adev->dev,"buffer: %s: %8.8x, buf_queue %u\n",
+	dev_dbg(&av->isys->adev->dev,"buffer: %s: %8.8llx, buf_queue %u\n",
 		av->vdev.name, vb2_dma_contig_plane_dma_addr(vb, 0),
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 4, 0)
 		vb->v4l2_buf.index
@@ -566,7 +564,7 @@ static void buf_queue(struct vb2_buffer *vb)
 	    );
 
 	for (i = 0; i < vb->num_planes; i++)
-		dev_dbg(&av->isys->adev->dev, "iova: plane %u iova 0x%x vaddr:0x%x\n", i,
+		dev_dbg(&av->isys->adev->dev, "iova: plane %u iova 0x%x vaddr:0x%p\n", i,
 			(u32)vb2_dma_contig_plane_dma_addr(vb, i), vb2_plane_vaddr(vb,i));
 
 	spin_lock_irqsave(&aq->lock, flags);
@@ -619,7 +617,7 @@ static void buf_queue(struct vb2_buffer *vb)
 				"error: buffer list get failed\n");
 			WARN_ON(1);
 		} else {
-			dev_warn(&av->isys->adev->dev,
+			dev_dbg(&av->isys->adev->dev,
 				"not enough buffers available rval: %d\n", rval);
 		}
 		goto out;
@@ -691,6 +689,9 @@ int ipu_isys_link_fmt_validate(struct ipu_isys_queue *aq)
 
 	fmt.which = V4L2_SUBDEV_FORMAT_ACTIVE;
 	fmt.pad = pad->index;
+	dev_dbg(&av->isys->adev->dev,
+		"%s:%d: sd->name: %s pad->index: %d \n",
+		__func__,  __LINE__, sd->name, pad->index);
 	rval = v4l2_subdev_call(sd, pad, get_fmt, NULL, &fmt);
 	if (rval)
 		return rval;
@@ -1109,7 +1110,7 @@ static int reset_start_streaming(struct ipu_isys_video *av)
 				ipu_isys_buffer,
 				head);
  struct vb2_buffer *vb = ipu_isys_buffer_to_vb2_buffer(ib);
-dev_dbg(&av->isys->adev->dev, "buffer: %s: %8.8x, vaddr: %p moved from active to incoming\n",
+dev_dbg(&av->isys->adev->dev, "buffer: %s: %8.8llx, vaddr: %p moved from active to incoming\n",
 av->vdev.name, vb2_dma_contig_plane_dma_addr(vb, 0), vb2_plane_vaddr(vb,0));
 
 
@@ -1503,7 +1504,8 @@ void ipu_isys_queue_buf_ready(struct ipu_isys_pipeline *ip,
 	struct vb2_v4l2_buffer *buf;
 #endif
 
-	dev_warn(&isys->adev->dev, "ipu_isys_queue_buf_ready: buffer: %s: received buffer %8.8x, pin_id %d\n",
+	dev_dbg(&isys->adev->dev,
+		"ipu_isys_queue_buf_ready: buffer: %s: received buffer %8.8x, pin_id %d\n",
 		ipu_isys_queue_to_video(aq)->vdev.name, info->pin.addr, info->pin_id);
 
 	spin_lock_irqsave(&aq->lock, flags);
@@ -1521,7 +1523,7 @@ void ipu_isys_queue_buf_ready(struct ipu_isys_pipeline *ip,
 
 		if (info->pin.addr != addr) {
 			if (first)
-				dev_err(&isys->adev->dev,
+				dev_dbg(&isys->adev->dev,
 					"WARN: buffer address %pad expected!\n",
 					&addr);
 			first = false;
