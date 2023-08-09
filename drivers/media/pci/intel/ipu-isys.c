@@ -1060,7 +1060,7 @@ static ssize_t ipu_isys_new_device_set(struct file *flip,
 {
 	struct ipu_isys *isys = flip->f_inode->i_private;
 
-	int res, ret;
+	int res;
 	int port, lanes, adapter, sens, ser, des;
 	char name[I2C_NAME_SIZE], end;
 	char buf[128];
@@ -1120,7 +1120,9 @@ static ssize_t ipu_isys_new_device_set(struct file *flip,
 	sd_info->i2c.board_info.platform_data = pdata;
 
 	isys_register_ext_subdev(isys, sd_info);
-	v4l2_device_register_subdev_nodes(&isys->v4l2_dev);
+	res = v4l2_device_register_subdev_nodes(&isys->v4l2_dev);
+	if (res)
+		isys_unregister_ext_subdev(isys, sd_info);
 	return len;
 }
 
@@ -1138,7 +1140,7 @@ static ssize_t ipu_isys_new_device_get(struct file *flip,
 		dev_err(&isys->adev->dev, "copy_to_user failed\n");
 		ret = -EFAULT;
 	} else {
-		dev_info(&isys->adev->dev, "ipu_isys_new_device_get ret:%d, msg:%d\n", ret,strlen(msg));
+		dev_info(&isys->adev->dev, "\n%s\n", msg);
 		once = ~once;
 		ret = strlen(msg) & once;
 	}
