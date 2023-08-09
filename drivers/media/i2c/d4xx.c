@@ -3148,8 +3148,9 @@ static int ds5_board_setup(struct ds5 *state)
 	/* look for already registered max9296, use same context if found */
 	for (i = 0; i < MAX_DEV_NUM; i++) {
 		if (serdes_inited[i] && serdes_inited[i]->dser_i2c) {
-dev_info(dev, "MAX9296 found device on 0x%x\n", serdes_inited[i]->dser_i2c->addr);	
-			if (serdes_inited[i]->dser_i2c->addr == i2c_info_des.addr) {
+			dev_info(dev, "MAX9296 found device on 0x%x\n", serdes_inited[i]->dser_i2c->addr);	
+			if (bus == serdes_inited[i]->dser_i2c->adapter->nr 
+				&& serdes_inited[i]->dser_i2c->addr == i2c_info_des.addr) {
 				dev_info(dev, "MAX9296 AGGREGATION found device on 0x%x\n", i2c_info_des.addr);	
 				state->dser_i2c = serdes_inited[i]->dser_i2c;
 				state->aggregated = 1;
