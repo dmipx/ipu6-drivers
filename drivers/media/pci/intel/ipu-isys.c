@@ -1052,7 +1052,8 @@ static void isys_remove(struct ipu_bus_device *adev)
 #if defined(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
 #include <media/ipu-acpi-pdata.h>
 /* use as such:
-echo "1 2 d4xx 1 0x16 0x44 0x4a" | sudo tee /sys/kernel/debug/intel-ipu6/isys/new_device
+echo "0 2 d4xx 1 0x16 0x60 0x48" | sudo tee /sys/kernel/debug/intel-ipu6/isys/new_device
+<csi port> <lanes> <device name> <i2c adapter> <sensor i2c> <ser i2c> <des i2c>
 */
 static ssize_t ipu_isys_new_device_set(struct file *flip,
 		const char __user *buffer, size_t len, loff_t *offset)
@@ -1065,7 +1066,6 @@ static ssize_t ipu_isys_new_device_set(struct file *flip,
 	char buf[128];
 	struct serdes_subdev_info *serdes_sdinfo;
 	struct serdes_platform_data *pdata;
-	// struct sensor_platform_data *pdata;
 	struct ipu_isys_subdev_info *sd_info;
 	struct ipu_isys_csi2_config *csi2_config;
 
@@ -1096,13 +1096,14 @@ static ssize_t ipu_isys_new_device_set(struct file *flip,
 		dev_err(NULL, "%s: Extra parameters\n", "new_device");
 		return -EINVAL;
 	}
-	dev_info(&isys->adev->dev, "res:%d, port:%d, lanes:%d, name:%s, adapter:%d, sens:0x%02x, ser:0x%02x, des:0x%02x\n", res,port, lanes, name, adapter, sens, ser, des);
+	dev_info(&isys->adev->dev, "res:%d, port:%d, lanes:%d, name:%s, adapter:%d, sens:0x%02x, ser:0x%02x, des:0x%02x\n",
+		res,port, lanes, name, adapter, sens, ser, des);
 
 	pdata->suffix = port + 'a';
 
 	serdes_sdinfo->ser_alias = ser;
 	serdes_sdinfo->board_info.addr = des;
-	// strlcpy(serdes_sdinfo->board_info.type, name, I2C_NAME_SIZE);
+	strlcpy(serdes_sdinfo->board_info.type, name, I2C_NAME_SIZE);
 
 
 	pdata->subdev_num = 1;
@@ -1119,7 +1120,8 @@ static ssize_t ipu_isys_new_device_set(struct file *flip,
 	sd_info->i2c.board_info.platform_data = pdata;
 
 	isys_register_ext_subdev(isys, sd_info);
-    return len;
+	v4l2_device_register_subdev_nodes(&isys->v4l2_dev);
+	return len;
 }
 
 static ssize_t ipu_isys_new_device_get(struct file *flip,
@@ -1142,9 +1144,6 @@ static ssize_t ipu_isys_new_device_get(struct file *flip,
 	}
 	return ret;
 }
-// DEFINE_SIMPLE_ATTRIBUTE(isys_new_device_fops,
-// 			ipu_isys_new_device_get,
-// 			ipu_isys_new_device_set, "%llu\n");
 
 static const struct file_operations isys_new_device_fops = {
 	.read = &ipu_isys_new_device_get,
