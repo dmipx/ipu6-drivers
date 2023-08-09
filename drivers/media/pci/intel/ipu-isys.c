@@ -1114,12 +1114,13 @@ static ssize_t ipu_isys_new_device_set(struct file *flip,
 	csi2_config->port = port;
 	sd_info->csi2 = csi2_config;
 	strlcpy(sd_info->i2c.board_info.type, name, I2C_NAME_SIZE);
-	strlcpy(sd_info->i2c.i2c_adapter_bdf, "0000:00:15.1", sizeof(sd_info->i2c.i2c_adapter_bdf));
 
 	sd_info->i2c.board_info.addr = sens;
 	sd_info->i2c.board_info.platform_data = pdata;
 
-	isys_register_ext_subdev(isys, sd_info);
+	res = isys_register_ext_subdev(isys, sd_info);
+	if (res)
+		return len;
 	res = v4l2_device_register_subdev_nodes(&isys->v4l2_dev);
 	if (res)
 		isys_unregister_ext_subdev(isys, sd_info);
@@ -1135,7 +1136,7 @@ static ssize_t ipu_isys_new_device_get(struct file *flip,
 	int ret;
 
 	ret = snprintf(msg, sizeof(msg), "IPU CSI2 new device binding\n"
-		"<csi port> <lanes> <device name> <i2c adapter> <sensor i2c> <ser i2c> <des i2c>\n");
+		"<csi port> <lanes> <device name> <i2c-designware adapter> <sensor i2c> <ser i2c> <des i2c>\n");
 	if (copy_to_user(buffer, msg, strlen(msg))) {
 		dev_err(&isys->adev->dev, "copy_to_user failed\n");
 		ret = -EFAULT;
