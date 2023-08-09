@@ -554,7 +554,7 @@ static void buf_queue(struct vb2_buffer *vb)
 	unsigned int i;
 	int rval;
 
-	dev_dbg(&av->isys->adev->dev,"buffer: %s: %8.8x, buf_queue %u\n",
+	dev_dbg(&av->isys->adev->dev,"buffer: %s: %8.8llx, buf_queue %u\n",
 		av->vdev.name, vb2_dma_contig_plane_dma_addr(vb, 0),
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 4, 0)
 		vb->v4l2_buf.index
@@ -564,7 +564,7 @@ static void buf_queue(struct vb2_buffer *vb)
 	    );
 
 	for (i = 0; i < vb->num_planes; i++)
-		dev_dbg(&av->isys->adev->dev, "iova: plane %u iova 0x%x vaddr:0x%x\n", i,
+		dev_dbg(&av->isys->adev->dev, "iova: plane %u iova 0x%x vaddr:0x%p\n", i,
 			(u32)vb2_dma_contig_plane_dma_addr(vb, i), vb2_plane_vaddr(vb,i));
 
 	spin_lock_irqsave(&aq->lock, flags);
@@ -1110,7 +1110,7 @@ static int reset_start_streaming(struct ipu_isys_video *av)
 				ipu_isys_buffer,
 				head);
  struct vb2_buffer *vb = ipu_isys_buffer_to_vb2_buffer(ib);
-dev_dbg(&av->isys->adev->dev, "buffer: %s: %8.8x, vaddr: %p moved from active to incoming\n",
+dev_dbg(&av->isys->adev->dev, "buffer: %s: %8.8llx, vaddr: %p moved from active to incoming\n",
 av->vdev.name, vb2_dma_contig_plane_dma_addr(vb, 0), vb2_plane_vaddr(vb,0));
 
 
@@ -1523,7 +1523,7 @@ void ipu_isys_queue_buf_ready(struct ipu_isys_pipeline *ip,
 
 		if (info->pin.addr != addr) {
 			if (first)
-				dev_err(&isys->adev->dev,
+				dev_dbg(&isys->adev->dev,
 					"WARN: buffer address %pad expected!\n",
 					&addr);
 			first = false;
