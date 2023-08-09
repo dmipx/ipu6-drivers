@@ -183,7 +183,9 @@ static int media_pipeline_enumerate_by_vc_cb(
 	};
 
 	if (!source_pad) {
-		dev_err(entity->graph_obj.mdev->dev, "%s:%d no remote pad found\n", __func__, __LINE__);
+		dev_err(entity->graph_obj.mdev->dev,
+			"%s:%d no remote pad found\n",
+			__func__, __LINE__);
 		kfree(ip);
 		return ret;
 	}
@@ -1101,7 +1103,10 @@ static int link_validate(struct media_link *link)
 		ip->source = to_ipu_isys_subdev(sd)->source;
 	}
 	if (ip->external && ip->external->entity)
-		dev_dbg(&av->isys->adev->dev, "%s:%d: sd:%s ip->external: %s ip->vc: %d ip->nr_queues:%d->%d\n", __func__,  __LINE__, sd->name, ip->external->entity->name, ip->vc, ip->nr_queues, ip->nr_queues+1);
+		dev_dbg(&av->isys->adev->dev,
+			"%s:%d: sd:%s ip->external: %s ip->vc: %d ip->nr_queues:%d->%d\n",
+			__func__,  __LINE__, sd->name, ip->external->entity->name,
+			ip->vc, ip->nr_queues, ip->nr_queues+1);
 
 	ip->nr_queues++;
 
@@ -1535,7 +1540,8 @@ static int ipu_isys_query_sensor_info(struct media_pad *source_pad,
 			ip->vc = ip->asv[qm.index].vc;
 			flag = true;
 			ip->external = link->source;
-			pr_debug("The current entityvc:id:%d pad_id: %d, substream %d, for: %s, set ip->external\n", ip->vc, pad_id, ip->asv[qm.index].substream, sd->name);
+			pr_debug("The current entityvc:id:%d pad_id: %d, substream %d, for: %s, set ip->external\n",
+				ip->vc, pad_id, ip->asv[qm.index].substream, sd->name);
 		}
 		dev_dbg(source_pad->entity->graph_obj.mdev->dev,
 			"dentity vc:%d, dt:%x, substream:%d\n",
@@ -1578,7 +1584,9 @@ static int media_pipeline_walk_by_vc(struct ipu_isys_video *av,
 	unsigned int av_pad_id = source_pad->index;
 
 	if (!source_pad) {
-		dev_err(entity->graph_obj.mdev->dev, "%s:%d no remote pad found\n", __func__, __LINE__);
+		dev_err(entity->graph_obj.mdev->dev,
+			"%s:%d no remote pad found\n",
+			__func__, __LINE__);
 		return ret;
 	}
 
@@ -1659,11 +1667,15 @@ static int media_pipeline_walk_by_vc(struct ipu_isys_video *av,
 			if (entity_vc != ip->vc)
 				continue;
 			if (ip->asv[i].substream == av_pad_id)
-				pr_info("METADATA VC :%d substream:%d, srcpad:%d\n", entity_vc, ip->asv[i].substream, av_pad_id);
+				dev_dbg(entity->graph_obj.mdev->dev,
+					"METADATA VC :%d substream:%d, srcpad:%d\n",
+					entity_vc, ip->asv[i].substream, av_pad_id);
 
 			if ((ip->asv[i].substream != (av_pad_id - 1)) &&
 				(ip->asv[i].substream != av_pad_id)) {
-				pr_info("SKIP VC:%d substream:%d, srcpad:%d\n", entity_vc, ip->asv[i].substream, av_pad_id);
+				dev_dbg(entity->graph_obj.mdev->dev,
+					"SKIP VC:%d substream:%d, srcpad:%d\n",
+					entity_vc, ip->asv[i].substream, av_pad_id);
 				continue;
 			}
 		}
@@ -1705,7 +1717,7 @@ static int media_pipeline_walk_by_vc(struct ipu_isys_video *av,
 
 			ret = entity->ops->link_validate(link);
 			if (ret < 0 && ret != -ENOIOCTLCMD) {
-				dev_warn(entity->graph_obj.mdev->dev,
+				dev_dbg(entity->graph_obj.mdev->dev,
 					"link failed for %s:%u->%s:%u,ret:%d\n",
 					link->source->entity->name,
 					link->source->index,
@@ -1814,7 +1826,9 @@ static int media_pipeline_walk_by_vc(struct ipu_isys_video *av,
 	bool is_vc = false;
 
 	if (!source_pad) {
-		dev_err(entity->graph_obj.mdev->dev, "%s:%d no remote pad found\n", __func__, __LINE__);
+		dev_err(entity->graph_obj.mdev->dev,
+			"%s:%d no remote pad found\n",
+			__func__, __LINE__);
 		return ret;
 	}
 
@@ -2001,7 +2015,8 @@ ipu_isys_prepare_fw_cfg_default(struct ipu_isys_video *av,
 	unsigned int sub_stream_id;
 
 	if (!source_pad) {
-		dev_err(&av->isys->adev->dev, "%s:%d no remote pad found\n", __func__, __LINE__);
+		dev_err(&av->isys->adev->dev,
+			"%s:%d no remote pad found\n", __func__, __LINE__);
 		return;
 	}
 
@@ -2548,7 +2563,7 @@ int ipu_isys_video_prepare_streaming(struct ipu_isys_video *av,
 
 	ip = &av->ip;
 
-dev_warn(dev, "prepare stream: state:%d nr_queues:%d->0\n", state, ip->nr_queues);
+	dev_dbg(dev, "prepare stream: state:%d nr_queues:%d->0\n", state, ip->nr_queues);
 	WARN_ON(ip->nr_streaming);
 	ip->has_sof = false;
 	ip->nr_queues = 0;
@@ -2819,7 +2834,7 @@ out_media_entity_stop_streaming:
 
 out_media_entity_graph_init:
 	media_graph_walk_cleanup(&ip->graph);
-	dev_err(dev, "stream on for %s failed: %d\n", ip->external->entity->name, rval);
+	dev_warn(dev, "stream on for %s failed: %d\n", ip->external->entity->name, rval);
 
 	return rval;
 }

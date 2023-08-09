@@ -40,7 +40,7 @@
 #include "ipu-platform-buttress-regs.h"
 
 #define ISYS_PM_QOS_VALUE	300
-#if defined(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
+#if IS_ENABLED(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
 /*
  * The param was passed from module to indicate if port
  * could be optimized.
@@ -269,7 +269,7 @@ static int ipu_pipeline_link_notify(struct media_link *link, u32 flags,
 /* END adapted code from drivers/media/platform/omap3isp/isp.c */
 #endif /* < v4.6 */
 
-#if defined(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
+#if IS_ENABLED(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
 struct isys_i2c_test {
 	u8 bus_nr;
 	u16 addr;
@@ -347,7 +347,7 @@ skip_unregister_subdev:
 	v4l2_device_unregister_subdev(sd);
 	return rval;
 }
-#if defined(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
+#if IS_ENABLED(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
 static int isys_register_ext_subdev(struct ipu_isys *isys,
 				    struct ipu_isys_subdev_info *sd_info)
 {
@@ -513,7 +513,7 @@ static int isys_register_subdevices(struct ipu_isys *isys)
 	const struct ipu_isys_internal_csi2_pdata *csi2 =
 	    &isys->pdata->ipdata->csi2;
 	struct ipu_isys_csi2_be_soc *csi2_be_soc;
-#if defined(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
+#if IS_ENABLED(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
 	struct ipu_isys_subdev_pdata *spdata = isys->pdata->spdata;
 	struct ipu_isys_subdev_info **sd_info;
 	DECLARE_BITMAP(csi2_enable, 32);
@@ -521,7 +521,7 @@ static int isys_register_subdevices(struct ipu_isys *isys)
 	unsigned int i, k;
 	int rval;
 
-#if defined(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
+#if IS_ENABLED(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
 	/*
 	 * Here is somewhat a workaround, let each platform decide
 	 * if csi2 port can be optimized, which means only registered
@@ -552,7 +552,7 @@ static int isys_register_subdevices(struct ipu_isys *isys)
 	}
 
 	for (i = 0; i < csi2->nports; i++) {
-#if defined(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
+#if IS_ENABLED(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
 		if (!test_bit(i, csi2_enable))
 			continue;
 #endif
@@ -583,7 +583,7 @@ static int isys_register_subdevices(struct ipu_isys *isys)
 	}
 
 	for (i = 0; i < csi2->nports; i++) {
-#if defined(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
+#if IS_ENABLED(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
 		if (!test_bit(i, csi2_enable))
 			continue;
 #endif
@@ -853,7 +853,7 @@ out_media_device_unregister:
 static void isys_unregister_devices(struct ipu_isys *isys)
 {
 	isys_unregister_subdevices(isys);
-#if defined(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
+#if IS_ENABLED(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
 	isys_unregister_ext_subdevs(isys);
 #endif
 	v4l2_device_unregister(&isys->v4l2_dev);
@@ -1195,10 +1195,10 @@ static int ipu_isys_init_debugfs(struct ipu_isys *isys)
 	if (IS_ERR(file))
 		goto err;
 #if defined(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
-	debugfs_create_file("new_device", 0600,
-				   dir, isys, &isys_new_device_fops);
-	// if (IS_ERR(file))
-		// goto err;
+	file = debugfs_create_file("new_device", 0600,
+		dir, isys, &isys_new_device_fops);
+	if (IS_ERR(file))
+		goto err;
 #endif
 	isys->debugfsdir = dir;
 

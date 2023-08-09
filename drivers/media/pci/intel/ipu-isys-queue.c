@@ -335,7 +335,6 @@ static int buffer_list_get(struct ipu_isys_pipeline *ip,
 		if (ib->req) {
 			spin_unlock_irqrestore(&aq->lock, flags);
 			ret = -ENODATA;
-
 			goto error;
 		}
 
@@ -554,7 +553,7 @@ static void buf_queue(struct vb2_buffer *vb)
 	unsigned int i;
 	int rval;
 
-	dev_dbg(&av->isys->adev->dev,"buffer: %s: %8.8llx, buf_queue %u\n",
+	dev_dbg(&av->isys->adev->dev, "buffer: %s: %8.8llx, buf_queue %u\n",
 		av->vdev.name, vb2_dma_contig_plane_dma_addr(vb, 0),
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 4, 0)
 		vb->v4l2_buf.index
@@ -805,7 +804,7 @@ static int __start_streaming(struct vb2_queue *q, unsigned int count)
 	bool first;
 	int rval;
 
-dev_warn(&av->isys->adev->dev,
+	dev_dbg(&av->isys->adev->dev,
 		"stream: %s: width %u, height %u, css pixelformat 0x%x\n",
 		av->vdev.name, av->mpix.width, av->mpix.height,
 		av->pfmt->css_pixelformat);
@@ -826,7 +825,7 @@ dev_warn(&av->isys->adev->dev,
 
 	mutex_unlock(&av->isys->stream_mutex);
 
-dev_warn(&av->isys->adev->dev,
+	dev_dbg(&av->isys->adev->dev,
 		"%s: first:%d, css pixelformat 0x%x\n",
 		av->vdev.name, first, av->pfmt->css_pixelformat);
 
@@ -845,15 +844,16 @@ dev_warn(&av->isys->adev->dev,
 		mutex_unlock(&av->mutex);
 		mutex_lock(&pipe_av->mutex);
 	}
-dev_warn(&av->isys->adev->dev, "%s: nr_streaming:%d->%d, nr_queues:%d, streaming:%d!\n",
-av->vdev.name,ip->nr_streaming,ip->nr_streaming+1,ip->nr_queues,ip->streaming);
+	dev_dbg(&av->isys->adev->dev,
+		"%s: nr_streaming:%d->%d, nr_queues:%d, streaming:%d!\n",
+		av->vdev.name,ip->nr_streaming,ip->nr_streaming+1,ip->nr_queues,ip->streaming);
 
 	ip->nr_streaming++;
-	dev_warn(&av->isys->adev->dev, "queue %u of %u\n", ip->nr_streaming,
+	dev_dbg(&av->isys->adev->dev, "queue %u of %u\n", ip->nr_streaming,
 		ip->nr_queues);
 	list_add(&aq->node, &ip->queues);
 	if (ip->nr_streaming != ip->nr_queues) {
-		dev_warn(&av->isys->adev->dev,
+		dev_dbg(&av->isys->adev->dev,
 			"%s: streaming queue not match nr_streaming(%d) nr_queues(%d) out..\n",
 			av->vdev.name, ip->nr_streaming, ip->nr_queues);
 		goto out;
@@ -867,7 +867,7 @@ av->vdev.name,ip->nr_streaming,ip->nr_streaming+1,ip->nr_queues,ip->streaming);
 				"buffer list invalid\n");
 			goto out_stream_start;
 		} else if (rval < 0) {
-			dev_warn(&av->isys->adev->dev,
+			dev_dbg(&av->isys->adev->dev,
 				"no request available, postponing streamon %d\n", rval);
 			goto out;
 		}
@@ -1011,7 +1011,7 @@ static int isys_fw_release(struct ipu_isys_video *av)
 	mutex_unlock(&isys->reset_mutex);
 
 	mutex_lock(&isys->mutex);
-	dev_warn(&isys->adev->dev, "%s:%d %s: close fw video_opened: %d->%d\n",
+	dev_dbg(&isys->adev->dev, "%s:%d %s: close fw video_opened: %d->%d\n",
 		__func__, __LINE__, av->vdev.name, isys->video_opened, isys->video_opened-1);
 	if (isys->video_opened)
 		isys->video_opened--;
@@ -1109,9 +1109,9 @@ static int reset_start_streaming(struct ipu_isys_video *av)
 				struct
 				ipu_isys_buffer,
 				head);
- struct vb2_buffer *vb = ipu_isys_buffer_to_vb2_buffer(ib);
-dev_dbg(&av->isys->adev->dev, "buffer: %s: %8.8llx, vaddr: %p moved from active to incoming\n",
-av->vdev.name, vb2_dma_contig_plane_dma_addr(vb, 0), vb2_plane_vaddr(vb,0));
+	struct vb2_buffer *vb = ipu_isys_buffer_to_vb2_buffer(ib);
+	dev_dbg(&av->isys->adev->dev, "buffer: %s: %8.8llx, vaddr: %p moved from active to incoming\n",
+		av->vdev.name, vb2_dma_contig_plane_dma_addr(vb, 0), vb2_plane_vaddr(vb,0));
 
 
 		list_del(&ib->head);
@@ -1122,7 +1122,7 @@ av->vdev.name, vb2_dma_contig_plane_dma_addr(vb, 0), vb2_plane_vaddr(vb,0));
 	av->skipframe = 1;
 	rval = __start_streaming(&aq->vbq, 0);
 	if (rval) {
-		dev_warn(&av->isys->adev->dev,
+		dev_dbg(&av->isys->adev->dev,
 			"%s: start streaming failed in reset\n",
 			av->vdev.name);
 	}
@@ -1142,7 +1142,7 @@ static int ipu_isys_reset(struct ipu_isys_video *self_av,
 	int rval, i, j;
 	int has_streaming = 0;
 
-	dev_warn(&isys->adev->dev, "%s\n", __func__);
+	dev_dbg(&isys->adev->dev, "%s\n", __func__);
 
 	mutex_lock(&isys->reset_mutex);
 	if (isys->in_reset) {
@@ -1205,10 +1205,10 @@ static int ipu_isys_reset(struct ipu_isys_video *self_av,
 	if (!has_streaming)
 		goto end_of_reset;
 
-	dev_warn(&isys->adev->dev, "ipu reset, close fw\n");
+	dev_dbg(&isys->adev->dev, "ipu reset, close fw\n");
 	ipu_fw_isys_close(isys);
 
-	dev_warn(&isys->adev->dev, "ipu reset, power cycle\n");
+	dev_dbg(&isys->adev->dev, "ipu reset, power cycle\n");
 
 	/* bus_pm_runtime_suspend() */
 	/* isys_runtime_pm_suspend() */
@@ -1241,7 +1241,7 @@ static int ipu_isys_reset(struct ipu_isys_video *self_av,
 	if (rval < 0)
 		dev_err(&isys->adev->dev, "ipu fw isys init failed\n");
 
-	dev_warn(&isys->adev->dev, "restart streams\n");
+	dev_dbg(&isys->adev->dev, "restart streams\n");
 
 	av = &isys->csi2->av;
 	if (av->reset) {
@@ -1277,7 +1277,7 @@ end_of_reset:
 	mutex_lock(&isys->reset_mutex);
 	isys->in_reset = false;
 	mutex_unlock(&isys->reset_mutex);
-	dev_warn(&isys->adev->dev, "reset done\n");
+	dev_dbg(&isys->adev->dev, "reset done\n");
 
 	return 0;
 }
@@ -1291,7 +1291,7 @@ static void stop_streaming(struct vb2_queue *q)
 	struct ipu_isys_video *pipe_av =
 	    container_of(ip, struct ipu_isys_video, ip);
 
-	dev_warn(&av->isys->adev->dev, "stop: %s: enter\n",
+	dev_dbg(&av->isys->adev->dev, "stop: %s: enter\n",
 		av->vdev.name);
 
 	mutex_unlock(&av->mutex);
@@ -1352,7 +1352,7 @@ static void stop_streaming(struct vb2_queue *q)
 		else
 			av->isys->reset_needed = 0;
 	}
-	dev_warn(&av->isys->adev->dev, "stop: %s: exit\n",
+	dev_dbg(&av->isys->adev->dev, "stop: %s: exit\n",
 		av->vdev.name);
 
 	mutex_lock(&av->isys->reset_mutex);
