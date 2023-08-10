@@ -916,6 +916,8 @@ static int vidioc_s_fmt_vid_cap_mplane(struct file *file, void *fh,
 		ip = &av->ip;
 		if (!(ip && ip->external && ip->external->entity)) {
 			ret = ipu_isys_query_sensor_info(source_pad, ip);
+			if (ret)
+				return -EINVAL;
 		}
 
 		/* set format for CSI-2 and CSI2 BE SOC  */
@@ -927,21 +929,26 @@ static int vidioc_s_fmt_vid_cap_mplane(struct file *file, void *fh,
 		if ((strncmp(remote_pad->entity->name,
 					IPU_ISYS_ENTITY_PREFIX " CSI",
 					strlen(IPU_ISYS_ENTITY_PREFIX " CSI")) != 0)){
-		dev_dbg(remote_pad->entity->graph_obj.mdev->dev,
-				"It finds: %s for %d will set and break\n", remote_pad->entity->name,source_pad->index);
-		if(ip->external && ip->external->entity) {
-			sd = media_entity_to_v4l2_subdev(ip->external->entity);
-		} else {
-			sd = media_entity_to_v4l2_subdev(remote_pad->entity);
-		}
-		ret = ipu_isys_set_fmt_subdev(av, sd, &fmt);
+			dev_dbg(remote_pad->entity->graph_obj.mdev->dev,
+				"%s:%d: It finds: %s for %d will set and break\n",
+				__func__, __LINE__,
+				remote_pad->entity->name, source_pad->index);
+			if (ip->external && ip->external->entity) {
+				sd = media_entity_to_v4l2_subdev(ip->external->entity);
+			} else {
+				sd = media_entity_to_v4l2_subdev(remote_pad->entity);
+			}
+			ret = ipu_isys_set_fmt_subdev(av, sd, &fmt);
+			if (ret)
+				return -EINVAL;
 			break;
 		}
 		dev_dbg(remote_pad->entity->graph_obj.mdev->dev,
-				"It finds: %s for %d\n", remote_pad->entity->name, source_pad->index);
+				"%s:%d: It finds: %s for %d\n",
+				__func__, __LINE__,
+				remote_pad->entity->name, source_pad->index);
 		sd = media_entity_to_v4l2_subdev(remote_pad->entity);
 		ret = ipu_isys_set_fmt_subdev(av, sd, &fmt);
-
 		if (ret)
 			return -EINVAL;
 	} while ((remote_pad =
@@ -1581,7 +1588,7 @@ static int media_pipeline_walk_by_vc(struct ipu_isys_video *av,
 	int entity_vc = INVALIA_VC_ID;
 	u32 n;
 	bool is_vc = false;
-	unsigned int av_pad_id = source_pad->index;
+	unsigned int av_pad_id;
 
 	if (!source_pad) {
 		dev_err(entity->graph_obj.mdev->dev,
@@ -1589,7 +1596,7 @@ static int media_pipeline_walk_by_vc(struct ipu_isys_video *av,
 			__func__, __LINE__);
 		return ret;
 	}
-
+	av_pad_id = source_pad->index;
 	is_vc = is_support_vc(source_pad, ip);
 	if (is_vc)  {
 		ret = ipu_isys_query_sensor_info(source_pad, ip);

@@ -1060,37 +1060,27 @@ static ssize_t ipu_isys_new_device_set(struct file *flip,
 {
 	struct ipu_isys *isys = flip->f_inode->i_private;
 
-	int res;
-	int port, lanes, adapter, sens, ser, des;
-	char name[I2C_NAME_SIZE], end;
+	int res = 0;
+	int port = 0, lanes = 0, adapter = 0;
+	int sens = 0, ser = 0, des = 0;
+	char name[I2C_NAME_SIZE], end = 0;
 	char buf[128];
-	struct serdes_subdev_info *serdes_sdinfo;
-	struct serdes_platform_data *pdata;
-	struct ipu_isys_subdev_info *sd_info;
-	struct ipu_isys_csi2_config *csi2_config;
+	struct serdes_subdev_info *serdes_sdinfo = NULL;
+	struct serdes_platform_data *pdata = NULL;
+	struct ipu_isys_subdev_info *sd_info = NULL;
+	struct ipu_isys_csi2_config *csi2_config = NULL;
 
-	csi2_config = kzalloc(sizeof(*csi2_config), GFP_KERNEL);
-	if (!csi2_config)
-		return -ENOMEM;
 	(void)offset;
 
+	if (!(isys && isys->adev && &isys->adev->dev))
+		return -EINVAL;
 	if (copy_from_user(buf, buffer, len)) {
 		pr_err("copy_from_user failed\n");
 		return 0;
 	}
-	sd_info = kzalloc(sizeof(*sd_info), GFP_KERNEL);
-	if (!sd_info)
-		return -ENOMEM;
-	pdata = kzalloc(sizeof(*pdata), GFP_KERNEL);
-	if (!pdata)
-		return -ENOMEM;
-	serdes_sdinfo = kzalloc(sizeof(*serdes_sdinfo), GFP_KERNEL);
-	if (!serdes_sdinfo)
-		return -ENOMEM;
 
 	buf[len] = 0;
-	if (isys && isys->adev && &isys->adev->dev)
-		dev_info(&isys->adev->dev, "isys_new_device_set function running val:%s\n", buf);
+	dev_info(&isys->adev->dev, "isys_new_device_set function running val:%s\n", buf);
 	res = sscanf(buf, "%d %d %s %d 0x%02x 0x%02x 0x%02x%c", &port, &lanes, name, &adapter, &sens, &ser, &des, &end);
 	if (res != 8 && end != '\n') {
 		dev_err(NULL, "%s: Incorrect parameters\n", "new_device");
@@ -1099,6 +1089,26 @@ static ssize_t ipu_isys_new_device_set(struct file *flip,
 	dev_info(&isys->adev->dev, "res:%d, port:%d, lanes:%d, name:%s, adapter:%d, sens:0x%02x, ser:0x%02x, des:0x%02x\n",
 		res,port, lanes, name, adapter, sens, ser, des);
 
+	csi2_config = kzalloc(sizeof(*csi2_config), GFP_KERNEL);
+	if (!csi2_config) {
+		res = -ENOMEM;
+		goto error;
+	}
+	sd_info = kzalloc(sizeof(*sd_info), GFP_KERNEL);
+	if (!sd_info) {
+		res = -ENOMEM;
+		goto error;
+	}
+	pdata = kzalloc(sizeof(*pdata), GFP_KERNEL);
+	if (!pdata) {
+		res = -ENOMEM;
+		goto error;
+	}
+	serdes_sdinfo = kzalloc(sizeof(*serdes_sdinfo), GFP_KERNEL);
+	if (!serdes_sdinfo) {
+		res = -ENOMEM;
+		goto error;
+	}
 	pdata->suffix = port + 'a';
 
 	serdes_sdinfo->ser_alias = ser;
@@ -1119,12 +1129,26 @@ static ssize_t ipu_isys_new_device_set(struct file *flip,
 	sd_info->i2c.board_info.platform_data = pdata;
 
 	res = isys_register_ext_subdev(isys, sd_info);
-	if (res)
-		return len;
+	if (res) {
+		goto error;
+	}
 	res = v4l2_device_register_subdev_nodes(&isys->v4l2_dev);
-	if (res)
+	if (res) {
 		isys_unregister_ext_subdev(isys, sd_info);
+		goto error;
+	}
 	return len;
+
+error:
+	if (csi2_config)
+		kfree(csi2_config);
+	if (sd_info)
+		kfree(sd_info);
+	if (pdata)
+		kfree(pdata);
+	if (serdes_sdinfo)
+		kfree(serdes_sdinfo);
+	return res;
 }
 
 static ssize_t ipu_isys_new_device_get(struct file *flip,
