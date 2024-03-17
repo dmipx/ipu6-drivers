@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-// Copyright (C) 2022 Intel Corporation
+// Copyright (C) 2023 Intel Corporation
 
 #include <linux/device.h>
 #include <linux/gpio.h>
@@ -654,6 +654,8 @@ static int ti960_registered(struct v4l2_subdev *subdev)
 	struct i2c_client *client = v4l2_get_subdevdata(subdev);
 	int i, j, k, l, m, rval;
 	bool port_registered[NR_OF_TI960_SINK_PADS];
+	bool speed_detect_fail;
+	unsigned char val;
 
 	for (i = 0 ; i < NR_OF_TI960_SINK_PADS; i++)
 		port_registered[i] = false;
@@ -751,6 +753,28 @@ static int ti960_registered(struct v4l2_subdev *subdev)
 		if (rval)
 			return rval;
 
+		ti953_bus_speed(&va->sd, info->rx_port, info->ser_alias,
+				TI953_I2C_SPEED_FAST_PLUS);
+		speed_detect_fail =
+			ti953_reg_read(&va->sd, info->rx_port,
+				       info->board_info.addr, 0, &val);
+		if (speed_detect_fail) {
+			ti953_bus_speed(&va->sd, info->rx_port, info->ser_alias,
+					TI953_I2C_SPEED_FAST);
+			speed_detect_fail =
+				ti953_reg_read(&va->sd, info->rx_port,
+					       info->board_info.addr, 0, &val);
+		}
+		if (speed_detect_fail) {
+			ti953_bus_speed(&va->sd, info->rx_port, info->ser_alias,
+					TI953_I2C_SPEED_STANDARD);
+			speed_detect_fail =
+				ti953_reg_read(&va->sd, info->rx_port,
+					       info->board_info.addr, 0, &val);
+		}
+		if (speed_detect_fail)
+			dev_err(va->sd.dev, "i2c bus speed standard failed!");
+
 		va->sub_devs[k].sd = v4l2_i2c_new_subdev_board(
 			va->sd.v4l2_dev, client->adapter,
 			&info->board_info, 0);
@@ -822,7 +846,7 @@ static int ti960_set_power(struct v4l2_subdev *subdev, int on)
 		return ret;
 
 	/* Select TX port 0 R/W by default */
-	ret = ti960_reg_write(va, 0x32, 0x01);
+	ret = ti960_reg_write(va, TI960_CSI_PORT_SEL, 0x01);
 	/* Configure MIPI clock bsaed on control value. */
 	ret = ti960_reg_write(va, TI960_CSI_PLL_CTL,
 			    ti960_op_sys_clock_reg_val[
@@ -830,7 +854,6 @@ static int ti960_set_power(struct v4l2_subdev *subdev, int on)
 	if (ret)
 		return ret;
 	val = TI960_CSI_ENABLE;
-	val |= TI960_CSI_CONTS_CLOCK;
 	/* Enable skew calculation when 1.6Gbps output is enabled. */
 	if (v4l2_ctrl_g_ctrl(va->link_freq) == 3) {
 		val |= TI960_CSI_SKEWCAL;
@@ -1200,6 +1223,19 @@ static const struct v4l2_subdev_core_ops ti960_core_subdev_ops = {
 #endif
 };
 
+static u8 ti960_get_nubmer_of_streaming(void)
+{
+	u8 n = 0;
+	u8 i = 0;
+
+	for (; i < ARRAY_SIZE(ti960_set_sub_stream); i++) {
+		if (ti960_set_sub_stream[i])
+			n++;
+	}
+
+	return n;
+}
+
 static int ti960_s_ctrl(struct v4l2_ctrl *ctrl)
 {
 	struct ti960 *va = container_of(ctrl->handler,
@@ -1215,11 +1251,24 @@ static int ti960_s_ctrl(struct v4l2_ctrl *ctrl)
 		dev_info(va->sd.dev, "V4L2_CID_IPU_SET_SUB_STREAM %x\n", val);
 		vc_id = (val >> 8) & 0x00FF;
 		state = val & 0x00FF;
-		if (vc_id > NR_OF_TI960_SINK_PADS - 1)
+		if (vc_id > NR_OF_TI960_SINK_PADS - 1) {
 			dev_err(va->sd.dev, "invalid vc %d\n", vc_id);
-		else
-			ti960_set_sub_stream[vc_id] = state;
+			break;
+		}
 
+		ti960_reg_write(va, TI960_CSI_PORT_SEL, 0x01);
+		ti960_reg_read(va, TI960_CSI_CTL, &val);
+		if (state) {
+			if (ti960_get_nubmer_of_streaming() == 0)
+				val |= TI960_CSI_CONTS_CLOCK;
+			ti960_set_sub_stream[vc_id] = state;
+		} else {
+			ti960_set_sub_stream[vc_id] = state;
+			if (ti960_get_nubmer_of_streaming() == 0)
+				val &= ~TI960_CSI_CONTS_CLOCK;
+		}
+
+		ti960_reg_write(va, TI960_CSI_CTL, val);
 		ti960_set_stream_vc(va, vc_id, state);
 		break;
 	default:
@@ -1469,8 +1518,12 @@ static int ti960_gpio_direction_output(struct gpio_chip *chip,
 	return 0;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0)
+static int ti960_probe(struct i2c_client *client)
+#else
 static int ti960_probe(struct i2c_client *client,
 			const struct i2c_device_id *devid)
+#endif
 {
 	struct ti960 *va;
 	int i, j, k, l, rval = 0;
@@ -1664,7 +1717,7 @@ static struct i2c_driver ti960_i2c_driver = {
 		.name = TI960_NAME,
 		.pm = &ti960_pm_ops,
 	},
-	.probe	= ti960_probe,
+	.probe = ti960_probe,
 	.remove	= ti960_remove,
 	.id_table = ti960_id_table,
 };

@@ -1,15 +1,17 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright (C) 2022 Intel Corporation */
+/* Copyright (C) 2023 Intel Corporation */
 #include <linux/interrupt.h>
 #include <media/ipu-acpi.h>
 #include <media/ar0234.h>
 #include <media/lt6911uxc.h>
+#include <media/lt6911uxe.h>
 #include <media/ti960.h>
 #include <media/imx390.h>
 #include <media/d4xx_pdata.h>
 
 #define CL_EMPTY 0
 #define CL_DISCRETE 1
+#define CL_LT 5
 #define SERDES_MAX_PORT 4
 #define SERDES_MAX_GPIO_POWERUP_SEQ 4
 #define LOOP_SIZE 10
@@ -88,6 +90,10 @@ struct serdes_local {
 
 	/* last mapped addr */
 	unsigned short ser_map_addr;
+
+	/* 2nd group of mapped addr for 2x sensors */
+	unsigned short sensor_map_addr_2;
+	unsigned short ser_map_addr_2;
 
 	/* current gpio_powerup_seq */
 	unsigned int gpio_powerup_seq;

@@ -77,7 +77,7 @@ static struct ipu_bus_device *ipu_isys_init(struct pci_dev *pdev,
 #endif
 	int ret;
 
-	pdata = devm_kzalloc(&pdev->dev, sizeof(*pdata), GFP_KERNEL);
+	pdata = kzalloc(sizeof(*pdata), GFP_KERNEL);
 	if (!pdata)
 		return ERR_PTR(-ENOMEM);
 
@@ -95,8 +95,9 @@ static struct ipu_bus_device *ipu_isys_init(struct pci_dev *pdev,
 					 IPU_ISYS_NAME, nr);
 	if (IS_ERR(isys)) {
 		dev_err_probe(&pdev->dev, PTR_ERR(isys),
-			      "ipu_bus_add_device(isys) failed\n");
-		return ERR_CAST(isys);
+			      "ipu_bus_initialize_device(isys) failed\n");
+		kfree(pdata);
+		return isys;
 	}
 #if IS_ENABLED(CONFIG_INTEL_IPU6_ACPI)
 	if (!spdata) {
@@ -113,8 +114,9 @@ static struct ipu_bus_device *ipu_isys_init(struct pci_dev *pdev,
 	isys->mmu = ipu_mmu_init(&pdev->dev, base, ISYS_MMID,
 				 &ipdata->hw_variant);
 	if (IS_ERR(isys->mmu)) {
-		dev_err_probe(&pdev->dev, PTR_ERR(isys),
+		dev_err_probe(&pdev->dev, PTR_ERR(isys->mmu),
 			      "ipu_mmu_init(isys->mmu) failed\n");
+		put_device(&isys->dev);
 		return ERR_CAST(isys->mmu);
 	}
 
@@ -138,7 +140,7 @@ static struct ipu_bus_device *ipu_psys_init(struct pci_dev *pdev,
 	struct ipu_psys_pdata *pdata;
 	int ret;
 
-	pdata = devm_kzalloc(&pdev->dev, sizeof(*pdata), GFP_KERNEL);
+	pdata = kzalloc(sizeof(*pdata), GFP_KERNEL);
 	if (!pdata)
 		return ERR_PTR(-ENOMEM);
 
@@ -149,15 +151,17 @@ static struct ipu_bus_device *ipu_psys_init(struct pci_dev *pdev,
 					 IPU_PSYS_NAME, nr);
 	if (IS_ERR(psys)) {
 		dev_err_probe(&pdev->dev, PTR_ERR(psys),
-			      "ipu_bus_add_device(psys) failed\n");
-		return ERR_CAST(psys);
+			      "ipu_bus_initialize_device(psys) failed\n");
+		kfree(pdata);
+		return psys;
 	}
 
 	psys->mmu = ipu_mmu_init(&pdev->dev, base, PSYS_MMID,
 				 &ipdata->hw_variant);
 	if (IS_ERR(psys->mmu)) {
-		dev_err_probe(&pdev->dev, PTR_ERR(psys),
+		dev_err_probe(&pdev->dev, PTR_ERR(psys->mmu),
 			      "ipu_mmu_init(psys->mmu) failed\n");
+		put_device(&psys->dev);
 		return ERR_CAST(psys->mmu);
 	}
 
@@ -563,7 +567,8 @@ static int ipu_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		break;
 	case IPU6EP_MTL_PCI_ID:
 		ipu_ver = IPU_VER_6EP_MTL;
-		isp->cpd_fw_name = IPU6EPMTL_FIRMWARE_NAME;
+		isp->cpd_fw_name = is_es ? IPU6EPMTLES_FIRMWARE_NAME
+					 : IPU6EPMTL_FIRMWARE_NAME;
 		break;
 	default:
 		WARN(1, "Unsupported IPU device");
@@ -608,7 +613,7 @@ static int ipu_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	rval = request_cpd_fw(&isp->cpd_fw, isp->cpd_fw_name, &pdev->dev);
 	if (rval) {
 		dev_err(&isp->pdev->dev, "Requesting signed firmware failed\n");
-		return rval;
+		goto buttress_exit;
 	}
 
 	rval = ipu_cpd_validate_cpd_file(isp, isp->cpd_fw->data,
@@ -782,13 +787,14 @@ out_ipu_bus_del_devices:
 	if (!IS_ERR_OR_NULL(isp->psys))
 		pm_runtime_put(&isp->psys->dev);
 	ipu_bus_del_devices(pdev);
-	ipu_buttress_exit(isp);
 	release_firmware(isp->cpd_fw);
 #if IS_ENABLED(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
 #if IS_ENABLED(CONFIG_VIDEO_INTEL_IPU_PDATA_DYNAMIC_LOADING)
 	release_firmware(isp->spdata_fw);
 #endif
 #endif
+buttress_exit:
+	ipu_buttress_exit(isp);
 
 	return rval;
 }
