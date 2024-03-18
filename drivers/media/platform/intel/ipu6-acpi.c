@@ -39,6 +39,7 @@
 #include <media/ipu-acpi.h>
 #include <media/ar0234.h>
 #include <media/lt6911uxc.h>
+#include <media/lt6911uxe.h>
 #include <media/imx390.h>
 #include <media/ti960.h>
 #include <media/d4xx_pdata.h>

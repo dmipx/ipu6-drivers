@@ -6,6 +6,7 @@
 #include <linux/module.h>
 #include <linux/string.h>
 #include <linux/delay.h>
+#include <linux/pm_runtime.h>
 
 #include <media/media-entity.h>
 #include <media/videobuf2-dma-contig.h>
