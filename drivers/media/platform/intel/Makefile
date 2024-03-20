@@ -7,6 +7,7 @@ endif
 
 ccflags-y += -I$(srcpath)/$(src)/../../../../include/
 ccflags-y += -I$(srcpath)/$(src)/../../pci/intel/
+ccflags-y += -DCONFIG_INTEL_IPU6_ACPI
 
 obj-$(CONFIG_INTEL_IPU6_TGLRVP_PDATA) += ipu6-tglrvp-pdata.o
 obj-$(CONFIG_INTEL_IPU6_JSLRVP_PDATA) += ipu6-jslrvp-pdata.o

@@ -24,6 +24,7 @@
 #include <linux/of.h>
 #include <linux/of_device.h>
 #include <linux/of_gpio.h>
+#include <linux/version.h>
 // #include <media/camera_common.h>
 #include <linux/regmap.h>
 #include <media/max9296.h>
@@ -1082,8 +1083,12 @@ static struct regmap_config max9296_regmap_config = {
 	.cache_type = REGCACHE_RBTREE,
 };
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0)
 static int max9296_probe(struct i2c_client *client,
 				const struct i2c_device_id *id)
+#else
+static int max9296_probe(struct i2c_client *client)
+#endif
 {
 	struct max9296 *priv;
 	int err = 0;
@@ -1130,8 +1135,11 @@ static int max9296_probe(struct i2c_client *client,
 	return err;
 }
 
-
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0)
 static int max9296_remove(struct i2c_client *client)
+#else
+static void max9296_remove(struct i2c_client *client)
+#endif
 {
 	struct max9296 *priv;
 
@@ -1144,8 +1152,9 @@ static int max9296_remove(struct i2c_client *client)
 		client = NULL;
 #endif
 	}
-
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0)
 	return 0;
+#endif
 }
 
 static const struct i2c_device_id max9296_id[] = {
