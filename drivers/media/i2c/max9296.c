@@ -1084,8 +1084,7 @@ static struct regmap_config max9296_regmap_config = {
 };
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0)
-static int max9296_probe(struct i2c_client *client,
-				const struct i2c_device_id *id)
+static int max9296_probe(struct i2c_client *client, const struct i2c_device_id *id)
 #else
 static int max9296_probe(struct i2c_client *client)
 #endif
@@ -1170,7 +1169,13 @@ static struct i2c_driver max9296_i2c_driver = {
 		.owner = THIS_MODULE,
 		.of_match_table = of_match_ptr(max9296_of_match),
 	},
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0)
 	.probe = max9296_probe,
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0)
+	.probe_new = max9296_probe,
+#else
+	.probe = max9296_probe,
+#endif
 	.remove = max9296_remove,
 	.id_table = max9296_id,
 };

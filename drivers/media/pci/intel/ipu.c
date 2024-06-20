@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-// Copyright (C) 2013 - 2022 Intel Corporation
+// Copyright (C) 2013 - 2024 Intel Corporation
 
 #include <linux/acpi.h>
 #include <linux/debugfs.h>
@@ -14,6 +14,7 @@
 #include <linux/pm_runtime.h>
 #include <linux/timer.h>
 #include <linux/sched.h>
+#include <linux/version.h>
 
 #include "ipu.h"
 #include "ipu-buttress.h"
@@ -26,6 +27,10 @@
 #include "ipu-platform-regs.h"
 #include "ipu-platform-isys-csi2-reg.h"
 #include "ipu-trace.h"
+#if IS_ENABLED(CONFIG_IPU_BRIDGE) && \
+LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+#include <media/ipu-bridge.h>
+#endif
 
 #if IS_ENABLED(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
 #if IS_ENABLED(CONFIG_VIDEO_INTEL_IPU_PDATA_DYNAMIC_LOADING)
@@ -58,6 +63,24 @@ static int isys_init_acpi_add_device(struct device *dev, void *priv,
 }
 #endif
 
+#if IS_ENABLED(CONFIG_IPU_BRIDGE) && LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+static int ipu_isys_check_fwnode_graph(struct fwnode_handle *fwnode)
+{
+	struct fwnode_handle *endpoint;
+
+	if (IS_ERR_OR_NULL(fwnode))
+		return -EINVAL;
+
+	endpoint = fwnode_graph_get_next_endpoint(fwnode, NULL);
+	if (endpoint) {
+		fwnode_handle_put(endpoint);
+		return 0;
+	}
+
+	return ipu_isys_check_fwnode_graph(fwnode->secondary);
+}
+#endif
+
 static struct ipu_bus_device *ipu_isys_init(struct pci_dev *pdev,
 					    struct device *parent,
 					    struct ipu_buttress_ctrl *ctrl,
@@ -76,6 +99,25 @@ static struct ipu_bus_device *ipu_isys_init(struct pci_dev *pdev,
 	struct ipu_isys_subdev_pdata *acpi_pdata;
 #endif
 	int ret;
+#if IS_ENABLED(CONFIG_IPU_BRIDGE) && LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+struct fwnode_handle *fwnode = dev_fwnode(&pdev->dev);
+
+	ret = ipu_isys_check_fwnode_graph(fwnode);
+	if (ret) {
+		if (fwnode && !IS_ERR_OR_NULL(fwnode->secondary)) {
+			dev_err(&pdev->dev,
+				"fwnode graph has no endpoints connection\n");
+			return ERR_PTR(-EINVAL);
+		}
+
+		ret = ipu_bridge_init(&pdev->dev, ipu_bridge_parse_ssdb);
+		if (ret) {
+			dev_err_probe(&pdev->dev, ret,
+				      "IPU bridge init failed\n");
+			return ERR_PTR(ret);
+		}
+	}
+#endif
 
 	pdata = kzalloc(sizeof(*pdata), GFP_KERNEL);
 	if (!pdata)
@@ -551,24 +593,31 @@ static int ipu_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	case IPU6_PCI_ID:
 		ipu_ver = IPU_VER_6;
 		isp->cpd_fw_name = IPU6_FIRMWARE_NAME;
+		isp->cpd_fw_name_new = IPU6_FIRMWARE_NAME_NEW;
 		break;
 	case IPU6SE_PCI_ID:
 		ipu_ver = IPU_VER_6SE;
 		isp->cpd_fw_name = IPU6SE_FIRMWARE_NAME;
+		isp->cpd_fw_name_new = IPU6SE_FIRMWARE_NAME_NEW;
 		break;
 	case IPU6EP_ADL_P_PCI_ID:
 	case IPU6EP_RPL_P_PCI_ID:
 		ipu_ver = IPU_VER_6EP;
 		isp->cpd_fw_name = is_es ? IPU6EPES_FIRMWARE_NAME : IPU6EP_FIRMWARE_NAME;
+		isp->cpd_fw_name_new = is_es ? IPU6EPES_FIRMWARE_NAME_NEW
+					     : IPU6EP_FIRMWARE_NAME_NEW;
 		break;
 	case IPU6EP_ADL_N_PCI_ID:
 		ipu_ver = IPU_VER_6EP;
 		isp->cpd_fw_name = IPU6EPADLN_FIRMWARE_NAME;
+		isp->cpd_fw_name_new = IPU6EPADLN_FIRMWARE_NAME_NEW;
 		break;
 	case IPU6EP_MTL_PCI_ID:
 		ipu_ver = IPU_VER_6EP_MTL;
 		isp->cpd_fw_name = is_es ? IPU6EPMTLES_FIRMWARE_NAME
 					 : IPU6EPMTL_FIRMWARE_NAME;
+		isp->cpd_fw_name_new = is_es ? IPU6EPMTLES_FIRMWARE_NAME_NEW
+					     : IPU6EPMTL_FIRMWARE_NAME_NEW;
 		break;
 	default:
 		WARN(1, "Unsupported IPU device");
@@ -608,9 +657,15 @@ static int ipu_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	if (rval)
 		return rval;
 
-	dev_info(&pdev->dev, "cpd file name: %s\n", isp->cpd_fw_name);
-
+	dev_dbg(&pdev->dev, "cpd file name: %s\n", isp->cpd_fw_name);
 	rval = request_cpd_fw(&isp->cpd_fw, isp->cpd_fw_name, &pdev->dev);
+	if (rval == -ENOENT) {
+		/* Try again with new FW path */
+		dev_dbg(&pdev->dev, "cpd file name: %s\n",
+			isp->cpd_fw_name_new);
+		rval = request_cpd_fw(&isp->cpd_fw, isp->cpd_fw_name_new,
+				      &pdev->dev);
+	}
 	if (rval) {
 		dev_err(&isp->pdev->dev, "Requesting signed firmware failed\n");
 		goto buttress_exit;
@@ -622,6 +677,13 @@ static int ipu_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		dev_err(&isp->pdev->dev, "Failed to validate cpd\n");
 		goto out_ipu_bus_del_devices;
 	}
+
+	dev_dbg(&isp->pdev->dev, "CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA=%d\n",
+		IS_ENABLED(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA));
+	dev_dbg(&isp->pdev->dev, "CONFIG_VIDEO_INTEL_IPU_PDATA_DYNAMIC_LOADING=%d\n",
+		IS_ENABLED(CONFIG_VIDEO_INTEL_IPU_PDATA_DYNAMIC_LOADING));
+	dev_dbg(&isp->pdev->dev, "CONFIG_INTEL_IPU6_ACPI=%d\n",
+		IS_ENABLED(CONFIG_INTEL_IPU6_ACPI));
 
 #if IS_ENABLED(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA)
 #if IS_ENABLED(CONFIG_VIDEO_INTEL_IPU_PDATA_DYNAMIC_LOADING)
@@ -802,6 +864,8 @@ buttress_exit:
 static void ipu_pci_remove(struct pci_dev *pdev)
 {
 	struct ipu_device *isp = pci_get_drvdata(pdev);
+	struct ipu_mmu *isys_mmu = isp->isys->mmu;
+	struct ipu_mmu *psys_mmu = isp->psys->mmu;
 
 #ifdef CONFIG_DEBUG_FS
 	ipu_remove_debugfs(isp);
@@ -829,8 +893,8 @@ static void ipu_pci_remove(struct pci_dev *pdev)
 
 	release_firmware(isp->cpd_fw);
 
-	ipu_mmu_cleanup(isp->psys->mmu);
-	ipu_mmu_cleanup(isp->isys->mmu);
+	ipu_mmu_cleanup(psys_mmu);
+	ipu_mmu_cleanup(isys_mmu);
 }
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 13, 0)
@@ -1031,6 +1095,10 @@ static void __exit ipu_exit(void)
 module_init(ipu_init);
 module_exit(ipu_exit);
 
+#if IS_ENABLED(CONFIG_IPU_BRIDGE) && \
+LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+MODULE_IMPORT_NS(INTEL_IPU_BRIDGE);
+#endif
 MODULE_AUTHOR("Sakari Ailus <sakari.ailus@linux.intel.com>");
 MODULE_AUTHOR("Jouni Högander <jouni.hogander@intel.com>");
 MODULE_AUTHOR("Antti Laakso <antti.laakso@intel.com>");

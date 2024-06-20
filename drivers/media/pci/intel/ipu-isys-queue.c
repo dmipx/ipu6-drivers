@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-// Copyright (C) 2013 - 2023 Intel Corporation
+// Copyright (C) 2013 - 2024 Intel Corporation
 
 #include <linux/completion.h>
 #include <linux/device.h>
@@ -15,10 +15,13 @@
 #include "ipu.h"
 #include "ipu-bus.h"
 #include "ipu-cpd.h"
+#include "ipu-platform-isys-csi2-reg.h"
 #include "ipu-buttress.h"
 #include "ipu-isys.h"
 #include "ipu-isys-csi2.h"
 #include "ipu-isys-video.h"
+
+extern int vnode_num;
 
 static bool wall_clock_ts_on;
 module_param(wall_clock_ts_on, bool, 0660);
@@ -554,8 +557,8 @@ static void buf_queue(struct vb2_buffer *vb)
 	unsigned int i;
 	int rval;
 
-	dev_dbg(&av->isys->adev->dev, "buffer: %s: buf_queue %u\n",
-		av->vdev.name,
+	dev_dbg(&av->isys->adev->dev, "buffer: %s: %8.8llx, buf_queue %u\n",
+		av->vdev.name, vb2_dma_contig_plane_dma_addr(vb, 0),
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 4, 0)
 		vb->v4l2_buf.index
 #else
@@ -564,8 +567,8 @@ static void buf_queue(struct vb2_buffer *vb)
 	    );
 
 	for (i = 0; i < vb->num_planes; i++)
-		dev_dbg(&av->isys->adev->dev, "iova: plane %u iova 0x%x\n", i,
-			(u32)vb2_dma_contig_plane_dma_addr(vb, i));
+		dev_dbg(&av->isys->adev->dev, "iova: plane %u iova 0x%x vaddr:0x%p\n", i,
+			(u32)vb2_dma_contig_plane_dma_addr(vb, i), vb2_plane_vaddr(vb,i));
 
 	spin_lock_irqsave(&aq->lock, flags);
 	list_add(&ib->head, &aq->incoming);
@@ -619,7 +622,7 @@ static void buf_queue(struct vb2_buffer *vb)
 			WARN_ON(1);
 		} else {
 			dev_dbg(&av->isys->adev->dev,
-				"not enough buffers available\n");
+				"not enough buffers available rval: %d\n", rval);
 		}
 		goto out;
 	}
@@ -1115,6 +1118,10 @@ static int reset_start_streaming(struct ipu_isys_video *av)
 				struct
 				ipu_isys_buffer,
 				head);
+	struct vb2_buffer *vb = ipu_isys_buffer_to_vb2_buffer(ib);
+	dev_dbg(&av->isys->adev->dev, "buffer: %s: %8.8llx, vaddr: %p moved from active to incoming\n",
+		av->vdev.name, vb2_dma_contig_plane_dma_addr(vb, 0), vb2_plane_vaddr(vb,0));
+
 
 		list_del(&ib->head);
 		list_add_tail(&ib->head, &aq->incoming);
@@ -1193,7 +1200,7 @@ static int ipu_isys_reset(struct ipu_isys_video *self_av,
 
 	for (i = 0; i < NR_OF_CSI2_BE_SOC_DEV; i++) {
 		csi2_be_soc = &isys->csi2_be_soc[i];
-		for (j = 0; j < NR_OF_CSI2_BE_SOC_SOURCE_PADS; j++) {
+		for (j = 0; j < vnode_num; j++) {
 			av = &csi2_be_soc->av[j];
 		if (av == self_av)
 			continue;
@@ -1280,7 +1287,7 @@ static int ipu_isys_reset(struct ipu_isys_video *self_av,
 
 	for (i = 0; i < NR_OF_CSI2_BE_SOC_DEV; i++) {
 		csi2_be_soc = &isys->csi2_be_soc[i];
-		for (j = 0; j < NR_OF_CSI2_BE_SOC_SOURCE_PADS; j++) {
+		for (j = 0; j < vnode_num; j++) {
 			av = &csi2_be_soc->av[j];
 		if (!av->reset)
 			continue;
@@ -1311,6 +1318,19 @@ static void stop_streaming(struct vb2_queue *q)
 		container_of(ip, struct ipu_isys_video, ip);
 	dev_dbg(&av->isys->adev->dev, "stop: %s: enter\n",
 		av->vdev.name);
+
+	bool is_vc = false;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0)
+	struct media_pad *source_pad = media_entity_remote_pad(&av->pad);
+#else
+	struct media_pad *source_pad = media_pad_remote_pad_first(&av->pad);
+#endif
+
+	if (!source_pad) {
+		dev_err(&av->isys->adev->dev, "stop stream: no link.\n");
+		return;
+	}
+	is_vc = is_support_vc(source_pad, ip);
 
 	mutex_unlock(&av->mutex);
 	mutex_lock(&av->isys->reset_mutex);
@@ -1381,7 +1401,7 @@ static void stop_streaming(struct vb2_queue *q)
 	mutex_unlock(&av->isys->reset_mutex);
 
 	if (av->isys->reset_needed) {
-		if (!ip->nr_streaming)
+		if (!ip->nr_streaming && (!is_vc || is_has_metadata(ip)))
 			ipu_isys_reset(av, ip);
 		else
 			av->isys->reset_needed = 0;
@@ -1504,13 +1524,13 @@ void ipu_isys_queue_buf_done(struct ipu_isys_buffer *ib)
 {
 	struct vb2_buffer *vb = ipu_isys_buffer_to_vb2_buffer(ib);
 
-	if (atomic_read(&ib->str2mmio_flag)) {
+	if (atomic_read(&ib->ib_err_flag)) {
 		vb2_buffer_done(vb, VB2_BUF_STATE_ERROR);
 		/*
 		 * Operation on buffer is ended with error and will be reported
 		 * to the userspace when it is de-queued
 		 */
-		atomic_set(&ib->str2mmio_flag, 0);
+		atomic_set(&ib->ib_err_flag, 0);
 	} else if (atomic_read(&ib->skipframe_flag)) {
 		vb2_buffer_done(vb, VB2_BUF_STATE_ERROR);
 		atomic_set(&ib->skipframe_flag, 0);
@@ -1535,8 +1555,9 @@ void ipu_isys_queue_buf_ready(struct ipu_isys_pipeline *ip,
 	struct vb2_v4l2_buffer *buf;
 #endif
 
-	dev_dbg(&isys->adev->dev, "buffer: %s: received buffer %8.8x\n",
-		ipu_isys_queue_to_video(aq)->vdev.name, info->pin.addr);
+	dev_dbg(&isys->adev->dev,
+		"ipu_isys_queue_buf_ready: buffer: %s: received buffer %8.8x, pin_id %d\n",
+		ipu_isys_queue_to_video(aq)->vdev.name, info->pin.addr, info->pin_id);
 
 	spin_lock_irqsave(&aq->lock, flags);
 	if (list_empty(&aq->active)) {
@@ -1553,20 +1574,34 @@ void ipu_isys_queue_buf_ready(struct ipu_isys_pipeline *ip,
 
 		if (info->pin.addr != addr) {
 			if (first)
-				dev_err(&isys->adev->dev,
+				dev_dbg(&isys->adev->dev,
 					"WARN: buffer address %pad expected!\n",
 					&addr);
 			first = false;
 			continue;
 		}
+		u32 mask = 0;
+		u32 csi2_status = ip->csi2->receiver_errors;
+		u32 irq = readl(ip->csi2->base + CSI_PORT_REG_BASE_IRQ_CSI +
+			CSI_PORT_REG_BASE_IRQ_STATUS_OFFSET);
+
+		mask = (ipu_ver == IPU_VER_6 || ipu_ver == IPU_VER_6EP ||
+			ipu_ver == IPU_VER_6EP_MTL) ?
+			IPU6_CSI_RX_ERROR_IRQ_MASK : IPU6SE_CSI_RX_ERROR_IRQ_MASK;
+
+		csi2_status |= irq & mask;
 
 		if (info->error_info.error ==
-		    IPU_FW_ISYS_ERROR_HW_REPORTED_STR2MMIO) {
+		    IPU_FW_ISYS_ERROR_HW_REPORTED_STR2MMIO ||
+		    csi2_status != 0) {
 			/*
 			 * Check for error message:
-			 * 'IPU_FW_ISYS_ERROR_HW_REPORTED_STR2MMIO'
+			 * 'IPU_FW_ISYS_ERROR_HW_REPORTED_STR2MMIO' &
+			 * CSI2 errors
 			 */
-			atomic_set(&ib->str2mmio_flag, 1);
+			dev_dbg(&isys->adev->dev, "buffer: csi2_status: 0x%x, fw error: %d\n",
+				csi2_status, info->error_info.error);
+			atomic_set(&ib->ib_err_flag, 1);
 		}
 		dev_dbg(&isys->adev->dev, "buffer: found buffer %pad\n", &addr);
 
@@ -1581,7 +1616,12 @@ void ipu_isys_queue_buf_ready(struct ipu_isys_pipeline *ip,
 		spin_unlock_irqrestore(&aq->lock, flags);
 
 		ipu_isys_buf_calc_sequence_time(ib, info);
+		struct vb2_buffer *vb = ipu_isys_buffer_to_vb2_buffer(ib);
+		struct vb2_v4l2_buffer *vbuf = to_vb2_v4l2_buffer(vb);
 
+		if (atomic_read(&ib->ib_err_flag))
+			dev_err(&isys->adev->dev, "csi2-%i error: #%d\n",
+					ip->csi2->index, vbuf->sequence);
 		/*
 		 * For interlaced buffers, the notification to user space
 		 * is postponed to capture_done event since the field

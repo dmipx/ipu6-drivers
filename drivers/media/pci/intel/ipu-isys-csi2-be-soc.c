@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-// Copyright (C) 2014 - 2022 Intel Corporation
+// Copyright (C) 2014 - 2024 Intel Corporation
 
 #include <linux/device.h>
 #include <linux/module.h>
@@ -14,6 +14,8 @@
 #include "ipu-isys-csi2-be.h"
 #include "ipu-isys-subdev.h"
 #include "ipu-isys-video.h"
+
+extern int vnode_num;
 
 /*
  * Raw bayer format pixel order MUST BE MAINTAINED in groups of four codes.
@@ -303,7 +305,7 @@ void ipu_isys_csi2_be_soc_cleanup(struct ipu_isys_csi2_be_soc *csi2_be_soc)
 
 	v4l2_device_unregister_subdev(&csi2_be_soc->asd.sd);
 	ipu_isys_subdev_cleanup(&csi2_be_soc->asd);
-	for (i = 0; i < NR_OF_CSI2_BE_SOC_STREAMS; i++) {
+	for (i = 0; i < vnode_num; i++) {
 		v4l2_ctrl_handler_free(&csi2_be_soc->av[i].ctrl_handler);
 		ipu_isys_video_cleanup(&csi2_be_soc->av[i]);
 	}
@@ -329,15 +331,15 @@ int ipu_isys_csi2_be_soc_init(struct ipu_isys_csi2_be_soc *csi2_be_soc,
 				    &csi2_be_soc_sd_ops, 0,
 				    NR_OF_CSI2_BE_SOC_PADS,
 				    NR_OF_CSI2_BE_SOC_SOURCE_PADS,
-				    NR_OF_CSI2_BE_SOC_SINK_PADS, 0);
+				    NR_OF_CSI2_BE_SOC_SINK_PADS, 0,
+				    CSI2_BE_SOC_PAD_SOURCE(0),
+				    CSI2_BE_SOC_PAD_SINK);
 	if (rval)
 		goto fail;
 
-	csi2_be_soc->asd.pad[CSI2_BE_SOC_PAD_SINK].flags = MEDIA_PAD_FL_SINK;
 	for (i = CSI2_BE_SOC_PAD_SOURCE(0);
 	     i < NR_OF_CSI2_BE_SOC_SOURCE_PADS + CSI2_BE_SOC_PAD_SOURCE(0);
 	     i++) {
-		csi2_be_soc->asd.pad[i].flags = MEDIA_PAD_FL_SOURCE;
 		csi2_be_soc->asd.valid_tgts[i].crop = true;
 	}
 
@@ -364,7 +366,7 @@ int ipu_isys_csi2_be_soc_init(struct ipu_isys_csi2_be_soc *csi2_be_soc,
 		goto fail;
 	}
 
-	for (i = 0; i < NR_OF_CSI2_BE_SOC_SOURCE_PADS; i++) {
+	for (i = 0; i < vnode_num; i++) {
 		if (!index)
 			snprintf(csi2_be_soc->av[i].vdev.name,
 				 sizeof(csi2_be_soc->av[i].vdev.name),

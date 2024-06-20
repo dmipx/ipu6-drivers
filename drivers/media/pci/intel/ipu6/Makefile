@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0
-# Copyright (c) 2017 - 2020 Intel Corporation.
+# Copyright (c) 2017 - 2024 Intel Corporation.
 
 ifneq ($(EXTERNAL_BUILD), 1)
 srcpath := $(srctree)
@@ -59,3 +59,4 @@ obj-$(CONFIG_VIDEO_INTEL_IPU6)		+= intel-ipu6-psys.o
 ccflags-y += -I$(srcpath)/$(src)/../../../../../include/
 ccflags-y += -I$(srcpath)/$(src)/../
 ccflags-y += -I$(srcpath)/$(src)/
+ccflags-y += -I$(M)/backport-include/ -I$(M)/include/

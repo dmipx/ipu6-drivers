@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright (C) 2013 - 2020 Intel Corporation */
+/* Copyright (C) 2013 - 2024 Intel Corporation */
 
 #ifndef IPU_ISYS_QUEUE_H
 #define IPU_ISYS_QUEUE_H
@@ -56,7 +56,7 @@ struct ipu_isys_buffer {
 	enum ipu_isys_buffer_type type;
 	struct list_head req_head;
 	struct media_device_request *req;
-	atomic_t str2mmio_flag;
+	atomic_t ib_err_flag;
 	atomic_t skipframe_flag;
 };
 

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-// Copyright (C) 2023 Intel Corporation
+// Copyright (C) 2024 Intel Corporation
 
 #include <linux/device.h>
 #include <linux/gpio.h>
@@ -10,6 +10,10 @@
 #include <linux/platform_device.h>
 #include <linux/ipu-isys.h>
 #include <linux/version.h>
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 19, 0)
+#include <linux/gpio/driver.h>
+#endif
 
 #include <media/media-device.h>
 #include <media/media-entity.h>
@@ -399,10 +403,8 @@ static int ti960_enum_mbus_code(struct v4l2_subdev *sd,
 #endif
 				struct v4l2_subdev_mbus_code_enum *code)
 {
-	struct ti960 *va = to_ti960(sd);
 	const uint32_t *supported_code =
 		ti960_supported_codes[code->pad];
-	bool next_stream = false;
 	int i;
 
 	for (i = 0; supported_code[i]; i++) {
@@ -431,12 +433,16 @@ static const struct ti960_csi_data_format
 static int ti960_get_frame_desc(struct v4l2_subdev *sd,
 	unsigned int pad, struct v4l2_mbus_frame_desc *desc)
 {
-	struct ti960 *va = to_ti960(sd);
 	int sink_pad = pad;
 
 	if (sink_pad >= 0) {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0)
 		struct media_pad *remote_pad =
 			media_entity_remote_pad(&sd->entity.pads[sink_pad]);
+#else
+		struct media_pad *remote_pad =
+			media_pad_remote_pad_first(&sd->entity.pads[sink_pad]);
+#endif
 		if (remote_pad) {
 			struct v4l2_subdev *rsd = media_entity_to_v4l2_subdev(remote_pad->entity);
 
@@ -470,8 +476,10 @@ __ti960_get_ffmt(struct v4l2_subdev *subdev,
 	if (which == V4L2_SUBDEV_FORMAT_TRY)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 14, 0)
 		return v4l2_subdev_get_try_format(subdev, cfg, pad);
-#else
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(6, 8, 0)
 		return v4l2_subdev_get_try_format(subdev, sd_state, pad);
+#else
+		return v4l2_subdev_state_get_format(sd_state, pad);
 #endif
 	else
 		return &va->ffmts[pad][stream];
@@ -572,9 +580,12 @@ static int ti960_open(struct v4l2_subdev *subdev,
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 14, 0)
 	struct v4l2_mbus_framefmt *try_fmt =
 		v4l2_subdev_get_try_format(subdev, fh->pad, 0);
-#else
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(6, 8, 0)
 	struct v4l2_mbus_framefmt *try_fmt =
 		v4l2_subdev_get_try_format(subdev, fh->state, 0);
+#else
+	struct v4l2_mbus_framefmt *try_fmt =
+		v4l2_subdev_state_get_format(fh->state, 0);
 #endif
 
 	struct v4l2_subdev_format fmt = {
@@ -732,7 +743,7 @@ static int ti960_registered(struct v4l2_subdev *subdev)
 
 			/* boot sequence */
 			for (m = 0; m < TI960_MAX_GPIO_POWERUP_SEQ; m++) {
-				if (va->subdev_pdata[k].gpio_powerup_seq[m] < 0)
+				if (va->subdev_pdata[k].gpio_powerup_seq[m] == (char)-1)
 					break;
 				ti953_reg_write(&va->sd, info->rx_port, info->ser_alias,
 						TI953_LOCAL_GPIO_DATA,
@@ -880,8 +891,13 @@ static bool ti960_broadcast_mode(struct v4l2_subdev *subdev)
 	int i, rval;
 
 	for (i = 0; i < NR_OF_TI960_SINK_PADS; i++) {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0)
 		struct media_pad *remote_pad =
 			media_entity_remote_pad(&va->pad[i]);
+#else
+		struct media_pad *remote_pad =
+			media_pad_remote_pad_first(&va->pad[i]);
+#endif
 
 		if (!remote_pad)
 			continue;
@@ -924,7 +940,6 @@ static bool ti960_broadcast_mode(struct v4l2_subdev *subdev)
 static int ti960_rx_port_config(struct ti960 *va, int sink, int rx_port)
 {
 	int rval;
-	int i;
 	unsigned int csi_vc_map;
 
 	/* Select RX port. */
@@ -1023,8 +1038,13 @@ static int ti960_set_stream(struct v4l2_subdev *subdev, int enable)
 
 	bitmap_zero(rx_port_enabled, 32);
 	for (i = 0; i < NR_OF_TI960_SINK_PADS; i++) {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 0, 0)
 		struct media_pad *remote_pad =
 			media_entity_remote_pad(&va->pad[i]);
+#else
+		struct media_pad *remote_pad =
+			media_pad_remote_pad_first(&va->pad[i]);
+#endif
 
 		if (!remote_pad)
 			continue;
@@ -1240,7 +1260,6 @@ static int ti960_s_ctrl(struct v4l2_ctrl *ctrl)
 {
 	struct ti960 *va = container_of(ctrl->handler,
 					     struct ti960, ctrl_handler);
-	struct i2c_client *client = v4l2_get_subdevdata(&va->sd);
 	u32 val;
 	u8 vc_id;
 	u8 state;
@@ -1290,7 +1309,7 @@ static const struct v4l2_ctrl_config ti960_controls[] = {
 		.type = V4L2_CTRL_TYPE_INTEGER_MENU,
 		.min = 0,
 		.max = ARRAY_SIZE(ti960_op_sys_clock) - 1,
-		.def = 3,
+		.def = 2,
 		.menu_skip_mask = 0,
 		.qmenu_int = ti960_op_sys_clock,
 	},
@@ -1526,7 +1545,7 @@ static int ti960_probe(struct i2c_client *client,
 #endif
 {
 	struct ti960 *va;
-	int i, j, k, l, rval = 0;
+	int i, rval = 0;
 	int gpio_FPD = 0;
 
 	if (client->dev.platform_data == NULL)
@@ -1645,22 +1664,34 @@ free_gpio:
 		if (gpio_FPD == 0)
 			gpio_set_value(va->pdata->FPD_gpio, 0);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 19, 0)
 		devm_gpio_free(&client->dev,
 			va->pdata->FPD_gpio);
+#else
+		gpio_free(va->pdata->FPD_gpio);
+#endif
 	}
 
 	dev_err(&client->dev, "%s Probe Failed", va->sd.name);
 	return rval;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0)
 static int ti960_remove(struct i2c_client *client)
+#else
+static void ti960_remove(struct i2c_client *client)
+#endif
 {
 	struct v4l2_subdev *subdev = i2c_get_clientdata(client);
 	struct ti960 *va = to_ti960(subdev);
 	int i;
 
 	if (!va)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0)
 		return 0;
+#else
+		return;
+#endif
 
 	mutex_destroy(&va->mutex);
 	v4l2_ctrl_handler_free(&va->ctrl_handler);
@@ -1679,7 +1710,9 @@ static int ti960_remove(struct i2c_client *client)
 
 	gpiochip_remove(&va->gc);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0)
 	return 0;
+#endif
 }
 
 #ifdef CONFIG_PM

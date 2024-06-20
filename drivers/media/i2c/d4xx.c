@@ -31,7 +31,7 @@
 #include <linux/videodev2.h>
 #include <linux/version.h>
 #ifdef CONFIG_VIDEO_INTEL_IPU6
-#include <linux/ipu-isys.h>
+#include <uapi/linux/ipu-isys.h>
 #include <media/d4xx_pdata.h>
 #endif
 #include <media/media-entity.h>
@@ -211,6 +211,7 @@ enum ds5_mux_pad {
 	if (max9295_write_8(state, addr, buf)) \
 		return -EINVAL; \
 	}
+#define D4XX_LINK_FREQ_750MHZ		750000000ULL
 #define D4XX_LINK_FREQ_360MHZ		360000000ULL
 #define D4XX_LINK_FREQ_300MHZ		300000000ULL
 #define D4XX_LINK_FREQ_288MHZ		288000000ULL
@@ -326,6 +327,7 @@ static const struct hwm_cmd ewb = {
 };
 #ifdef CONFIG_VIDEO_INTEL_IPU6
 static const s64 link_freq_menu_items[] = {
+	D4XX_LINK_FREQ_750MHZ,
 	D4XX_LINK_FREQ_360MHZ,
 	D4XX_LINK_FREQ_300MHZ,
 	D4XX_LINK_FREQ_288MHZ,
@@ -1243,8 +1245,10 @@ static int ds5_sensor_get_fmt(struct v4l2_subdev *sd,
 	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 10)
 		fmt->format = *v4l2_subdev_get_try_format(sd, cfg, fmt->pad);
-#else
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(6, 8, 0)
 		fmt->format = *v4l2_subdev_get_try_format(sd, v4l2_state, fmt->pad);
+#else
+		fmt->format = *v4l2_subdev_state_get_format(v4l2_state, fmt->pad);
 #endif
 	else
 		fmt->format = sensor->format;
@@ -1456,9 +1460,12 @@ static int __ds5_sensor_set_fmt(struct ds5 *state, struct ds5_sensor *sensor,
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 10)
 	if (cfg && fmt->which == V4L2_SUBDEV_FORMAT_TRY)
 		*v4l2_subdev_get_try_format(&sensor->sd, cfg, fmt->pad) = *mf;
-#else
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(6, 8, 0)
 	if (v4l2_state && fmt->which == V4L2_SUBDEV_FORMAT_TRY)
 		*v4l2_subdev_get_try_format(&sensor->sd, v4l2_state, fmt->pad) = *mf;
+#else
+	if (v4l2_state && fmt->which == V4L2_SUBDEV_FORMAT_TRY)
+		*v4l2_subdev_state_get_format(v4l2_state, fmt->pad) = *mf;
 #endif
 
 	else
@@ -1642,16 +1649,16 @@ static int ds5_configure(struct ds5 *state)
 	return 0;
 }
 
-static const struct v4l2_subdev_pad_ops ds5_depth_pad_ops = {
-	.enum_mbus_code		= ds5_sensor_enum_mbus_code,
-	.enum_frame_size	= ds5_sensor_enum_frame_size,
-	.enum_frame_interval	= ds5_sensor_enum_frame_interval,
-	.get_fmt		= ds5_sensor_get_fmt,
-	.set_fmt		= ds5_sensor_set_fmt,
-};
-
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0)
+/* pad ops */
+static int ds5_sensor_g_frame_interval(struct v4l2_subdev *sd,
+				       struct v4l2_subdev_state *sd_state,
+		struct v4l2_subdev_frame_interval *fi)
+#else
+/* Video ops */
 static int ds5_sensor_g_frame_interval(struct v4l2_subdev *sd,
 		struct v4l2_subdev_frame_interval *fi)
+#endif
 {
 	struct ds5_sensor *sensor = container_of(sd, struct ds5_sensor, sd);
 
@@ -1668,8 +1675,16 @@ static int ds5_sensor_g_frame_interval(struct v4l2_subdev *sd,
 }
 static u16 __ds5_probe_framerate(const struct ds5_resolution *res, u16 target);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0)
+/* pad ops */
+static int ds5_sensor_s_frame_interval(struct v4l2_subdev *sd,
+				       struct v4l2_subdev_state *sd_state,
+		struct v4l2_subdev_frame_interval *fi)
+#else
+/* Video ops */
 static int ds5_sensor_s_frame_interval(struct v4l2_subdev *sd,
 		struct v4l2_subdev_frame_interval *fi)
+#endif
 {
 	struct ds5_sensor *sensor = container_of(sd, struct ds5_sensor, sd);
 	u16 framerate = 1;
@@ -1700,9 +1715,23 @@ static int ds5_sensor_s_stream(struct v4l2_subdev *sd, int on)
 	return 0;
 }
 
+static const struct v4l2_subdev_pad_ops ds5_depth_pad_ops = {
+	.enum_mbus_code		= ds5_sensor_enum_mbus_code,
+	.enum_frame_size	= ds5_sensor_enum_frame_size,
+	.enum_frame_interval	= ds5_sensor_enum_frame_interval,
+	.get_fmt		= ds5_sensor_get_fmt,
+	.set_fmt		= ds5_sensor_set_fmt,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0)
+	.get_frame_interval	= ds5_sensor_g_frame_interval,
+	.set_frame_interval	= ds5_sensor_s_frame_interval,
+#endif
+};
+
 static const struct v4l2_subdev_video_ops ds5_sensor_video_ops = {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 8, 0)
 	.g_frame_interval	= ds5_sensor_g_frame_interval,
 	.s_frame_interval	= ds5_sensor_s_frame_interval,
+#endif
 	.s_stream		= ds5_sensor_s_stream,
 };
 
@@ -1720,6 +1749,10 @@ static const struct v4l2_subdev_pad_ops ds5_ir_pad_ops = {
 	.enum_frame_interval	= ds5_sensor_enum_frame_interval,
 	.get_fmt		= ds5_sensor_get_fmt,
 	.set_fmt		= ds5_sensor_set_fmt,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0)
+	.get_frame_interval	= ds5_sensor_g_frame_interval,
+	.set_frame_interval	= ds5_sensor_s_frame_interval,
+#endif
 };
 
 static const struct v4l2_subdev_ops ds5_ir_subdev_ops = {
@@ -1734,6 +1767,10 @@ static const struct v4l2_subdev_pad_ops ds5_rgb_pad_ops = {
 	.enum_frame_interval	= ds5_sensor_enum_frame_interval,
 	.get_fmt		= ds5_sensor_get_fmt,
 	.set_fmt		= ds5_sensor_set_fmt,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0)
+	.get_frame_interval	= ds5_sensor_g_frame_interval,
+	.set_frame_interval	= ds5_sensor_s_frame_interval,
+#endif
 };
 
 static const struct v4l2_subdev_ops ds5_rgb_subdev_ops = {
@@ -1747,6 +1784,10 @@ static const struct v4l2_subdev_pad_ops ds5_imu_pad_ops = {
 	.enum_frame_interval	= ds5_sensor_enum_frame_interval,
 	.get_fmt		= ds5_sensor_get_fmt,
 	.set_fmt		= ds5_sensor_set_fmt,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0)
+	.get_frame_interval	= ds5_sensor_g_frame_interval,
+	.set_frame_interval	= ds5_sensor_s_frame_interval,
+#endif
 };
 
 static const struct v4l2_subdev_ops ds5_imu_subdev_ops = {
@@ -2310,6 +2351,20 @@ static int ds5_s_ctrl(struct v4l2_ctrl *ctrl)
 #endif
 	}
 		break;
+	case V4L2_CID_LINK_FREQ: {
+		if ( sensor && ctrl->p_new.p_u8)
+		{
+		  if (*ctrl->p_new.p_u8 <= (ARRAY_SIZE(link_freq_menu_items) - 1)) {
+			struct v4l2_ctrl *link_freq = state->ctrls.link_freq;
+			dev_info(&state->client->dev,
+				"V4L2_CID_LINK_FREQ modify index to val=%d",
+				 (unsigned int) *ctrl->p_new.p_u8);
+			ret = 0;
+		  }
+		}
+
+	}
+	  break;
 #endif
 	}
 
@@ -2640,7 +2695,7 @@ static int ds5_g_volatile_ctrl(struct v4l2_ctrl *ctrl)
 
 			dev_dbg(sensor->sd.dev,
 				"%s(): V4L2_CID_IPU_QUERY_SUB_STREAM sensor->mux_pad:%d"
-				"vc:[%d] %d\n",
+				", vc:[%d] %d\n",
 				__func__, sensor->mux_pad, vc_id, substream);
 			*ctrl->p_new.p_s32 = substream;
 			state->mux.last_set = sensor;
@@ -2885,7 +2940,7 @@ static const struct v4l2_ctrl_config d4xx_controls_link_freq = {
 	.max = ARRAY_SIZE(link_freq_menu_items) - 1,
 	.min =  0,
 	.step  = 0,
-	.def = 1,
+	.def = 2,    // default D4XX_LINK_FREQ_300MHZ
 	.qmenu_int = link_freq_menu_items,
 };
 
@@ -3556,10 +3611,13 @@ static int ds5_ctrl_init(struct ds5 *state, int sid)
 	}
 #ifdef CONFIG_VIDEO_INTEL_IPU6
 	ctrls->link_freq = v4l2_ctrl_new_custom(hdl, &d4xx_controls_link_freq, sensor);
-
+	/* MTL and RPL/ADL IPU6 CSI-DPHY do NOT share
+	 *  the same default link_freq.
+	 * V4L2_CID_LINK_FREQ must be R/W for udev ot set DPHY platform specific link_freq
+	 * at systemd boottime.
 	if (ctrls->link_freq)
 		ctrls->link_freq->flags |= V4L2_CTRL_FLAG_READ_ONLY;
-
+	*/
 	if (state->aggregated) {
 		d4xx_controls_q_sub_stream.def = NR_OF_DS5_SUB_STREAMS;
 		d4xx_controls_q_sub_stream.min = NR_OF_DS5_SUB_STREAMS;
@@ -4073,9 +4131,16 @@ static int ds5_mux_get_fmt(struct v4l2_subdev *sd,
 	return ret;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0)
+/* pad ops */
+static int ds5_mux_g_frame_interval(struct v4l2_subdev *sd,
+				    struct v4l2_subdev_state *sd_state,
+				    struct v4l2_subdev_frame_interval *fi)
+#else
 /* Video ops */
 static int ds5_mux_g_frame_interval(struct v4l2_subdev *sd,
 		struct v4l2_subdev_frame_interval *fi)
+#endif
 {
 	struct ds5 *state = container_of(sd, struct ds5, mux.sd.subdev);
 	struct ds5_sensor *sensor = NULL;
@@ -4108,8 +4173,16 @@ static u16 __ds5_probe_framerate(const struct ds5_resolution *res, u16 target)
 	return res->framerates[res->n_framerates - 1];
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0)
+/* pad ops */
+static int ds5_mux_s_frame_interval(struct v4l2_subdev *sd,
+				    struct v4l2_subdev_state *sd_state,
+				    struct v4l2_subdev_frame_interval *fi)
+#else
+/* Video ops */
 static int ds5_mux_s_frame_interval(struct v4l2_subdev *sd,
 		struct v4l2_subdev_frame_interval *fi)
+#endif
 {
 	struct ds5 *state = container_of(sd, struct ds5, mux.sd.subdev);
 	struct ds5_sensor *sensor = NULL;
@@ -4365,6 +4438,10 @@ static const struct v4l2_subdev_pad_ops ds5_mux_pad_ops = {
 	.get_fmt		= ds5_mux_get_fmt,
 	.set_fmt		= ds5_mux_set_fmt,
 	.get_frame_desc		= ds5_mux_get_frame_desc,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0)
+	.get_frame_interval	= ds5_mux_g_frame_interval,
+	.set_frame_interval	= ds5_mux_s_frame_interval,
+#endif
 };
 
 static const struct v4l2_subdev_core_ops ds5_mux_core_ops = {
@@ -4373,8 +4450,10 @@ static const struct v4l2_subdev_core_ops ds5_mux_core_ops = {
 };
 
 static const struct v4l2_subdev_video_ops ds5_mux_video_ops = {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 8, 0)
 	.g_frame_interval	= ds5_mux_g_frame_interval,
 	.s_frame_interval	= ds5_mux_s_frame_interval,
+#endif
 	.s_stream		= ds5_mux_s_stream,
 };
 
@@ -5175,7 +5254,7 @@ static int ds5_chrdev_init(struct i2c_client *c, struct ds5 *state)
 		dev_dbg(&c->dev, "%s(): <Major, Minor>: <%d, %d>\n",
 				__func__, MAJOR(*dev_num), MINOR(*dev_num));
 		/* Create a class : appears at /sys/class */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 2, 0)
 		*ds5_class = class_create(THIS_MODULE, DS5_DRIVER_NAME_CLASS);
 #else
 		*ds5_class = class_create(DS5_DRIVER_NAME_CLASS);
@@ -5806,7 +5885,13 @@ static struct i2c_driver ds5_i2c_driver = {
 		.owner = THIS_MODULE,
 		.name = DS5_DRIVER_NAME
 	},
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0)
+        .probe          = ds5_probe,
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0)
+	.probe_new	= ds5_probe,
+#else
 	.probe		= ds5_probe,
+#endif
 	.remove		= ds5_remove,
 	.id_table	= ds5_id,
 };

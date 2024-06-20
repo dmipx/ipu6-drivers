@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-// Copyright (C) 2018 - 2021 Intel Corporation
+// Copyright (C) 2018 - 2024 Intel Corporation
 
 #include <linux/device.h>
 #include <linux/delay.h>
@@ -292,29 +292,6 @@ void ipu_configure_spc(struct ipu_device *isp,
 					   pkg_dir, pkg_dir_dma_addr);
 }
 EXPORT_SYMBOL(ipu_configure_spc);
-
-int ipu_buttress_psys_freq_get(void *data, u64 *val)
-{
-	struct ipu_device *isp = data;
-	u32 reg_val;
-	int rval;
-
-	rval = pm_runtime_get_sync(&isp->psys->dev);
-	if (rval < 0) {
-		pm_runtime_put(&isp->psys->dev);
-		dev_err(&isp->pdev->dev, "Runtime PM failed (%d)\n", rval);
-		return rval;
-	}
-
-	reg_val = readl(isp->base + BUTTRESS_REG_PS_FREQ_CTL);
-
-	pm_runtime_put(&isp->psys->dev);
-
-	*val = IPU_PS_FREQ_RATIO_BASE *
-	    (reg_val & IPU_BUTTRESS_PS_FREQ_CTL_DIVISOR_MASK);
-
-	return 0;
-}
 
 void ipu_internal_pdata_init(void)
 {

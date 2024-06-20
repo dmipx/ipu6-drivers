@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-// Copyright (C) 2013 - 2021 Intel Corporation
+// Copyright (C) 2013 - 2024 Intel Corporation
 
 #include <asm/cacheflush.h>
 
@@ -173,8 +173,8 @@ ipu_fw_isys_complex_cmd(struct ipu_isys *isys,
 	if (send_type >= N_IPU_FW_ISYS_SEND_TYPE)
 		return -EINVAL;
 
-	dev_dbg(&isys->adev->dev, "send_token: %s\n",
-		send_msg_types[send_type]);
+	dev_dbg(&isys->adev->dev, "send_token: %s, stream_handle: %u\n",
+		send_msg_types[send_type], stream_handle);
 
 	/*
 	 * Time to flush cache in case we have some payload. Not all messages

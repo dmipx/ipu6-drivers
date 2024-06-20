@@ -1627,7 +1627,7 @@ static struct v4l2_ctrl_config ar0234_csi_port = {
 	.id	= AR0234_CID_CSI_PORT,
 	.type	= V4L2_CTRL_TYPE_INTEGER,
 	.name	= "CSI port",
-	.min	= 1,
+	.min	= 0,
 	.max	= 5,
 	.def	= 1,
 	.step	= 1,
@@ -1878,7 +1878,12 @@ static int ar0234_set_stream(struct v4l2_subdev *sd, int enable)
 }
 
 static int ar0234_g_frame_interval(struct v4l2_subdev *sd,
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 8, 0)
 		struct v4l2_subdev_frame_interval *fival)
+#else
+		struct v4l2_subdev_state *sd_state,
+		 struct v4l2_subdev_frame_interval *fival)
+#endif
 {
 	struct ar0234 *ar0234 = to_ar0234(sd);
 
@@ -1964,8 +1969,10 @@ static int ar0234_set_format(struct v4l2_subdev *sd,
 	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY) {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 14, 0)
 		*v4l2_subdev_get_try_format(sd, cfg, fmt->pad) = fmt->format;
-#else
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(6, 8, 0)
 		*v4l2_subdev_get_try_format(sd, sd_state, fmt->pad) = fmt->format;
+#else
+		*v4l2_subdev_state_get_format(sd_state, fmt->pad) = fmt->format;
 #endif
 	} else {
 		ar0234->cur_mode = mode;
@@ -2016,8 +2023,11 @@ static int ar0234_get_format(struct v4l2_subdev *sd,
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 14, 0)
 		fmt->format = *v4l2_subdev_get_try_format(&ar0234->sd, cfg,
 							  fmt->pad);
-#else
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(6, 8, 0)
 		fmt->format = *v4l2_subdev_get_try_format(&ar0234->sd,
+							  sd_state, fmt->pad);
+#else
+		fmt->format = *v4l2_subdev_state_get_format(
 							  sd_state, fmt->pad);
 #endif
 	else
@@ -2102,8 +2112,10 @@ static int ar0234_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 	ar0234_update_pad_format(&supported_modes[0],
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 14, 0)
 				 v4l2_subdev_get_try_format(sd, fh->pad, 0));
-#else
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(6, 8, 0)
 				 v4l2_subdev_get_try_format(sd, fh->state, 0));
+#else
+				 v4l2_subdev_state_get_format(fh->state, 0));
 #endif
 	mutex_unlock(&ar0234->mutex);
 
@@ -2112,7 +2124,9 @@ static int ar0234_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 
 static const struct v4l2_subdev_video_ops ar0234_video_ops = {
 	.s_stream = ar0234_set_stream,
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 8, 0)
 	.g_frame_interval = ar0234_g_frame_interval,
+#endif
 };
 
 static const struct v4l2_subdev_pad_ops ar0234_pad_ops = {
@@ -2121,6 +2135,9 @@ static const struct v4l2_subdev_pad_ops ar0234_pad_ops = {
 	.enum_mbus_code = ar0234_enum_mbus_code,
 	.enum_frame_size = ar0234_enum_frame_size,
 	.enum_frame_interval = ar0234_enum_frame_interval,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0)
+	.get_frame_interval = ar0234_g_frame_interval,
+#endif
 };
 
 static const struct v4l2_subdev_ops ar0234_subdev_ops = {

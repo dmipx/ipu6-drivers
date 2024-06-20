@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-// Copyright (c) 2021-2023 Intel Corporation.
+// Copyright (c) 2021-2024 Intel Corporation.
 
 #include <asm/unaligned.h>
 #include <linux/acpi.h>
@@ -1646,8 +1646,16 @@ static int imx390_set_stream(struct v4l2_subdev *sd, int enable)
 	return ret;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0)
+/* pad ops */
+static int imx390_g_frame_interval(struct v4l2_subdev *sd,
+				       struct v4l2_subdev_state *sd_state,
+		struct v4l2_subdev_frame_interval *fival)
+#else
+/* Video ops */
 static int imx390_g_frame_interval(struct v4l2_subdev *sd,
 		struct v4l2_subdev_frame_interval *fival)
+#endif
 {
 	struct imx390 *imx390 = to_imx390(sd);
 
@@ -1706,7 +1714,6 @@ static int imx390_set_format(struct v4l2_subdev *sd,
 {
 	struct imx390 *imx390 = to_imx390(sd);
 	const struct imx390_mode *mode;
-	int ret = 0;
 	s32 vblank_def;
 	s64 hblank;
 	int i;
@@ -1732,8 +1739,10 @@ static int imx390_set_format(struct v4l2_subdev *sd,
 	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY) {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 14, 0)
 		*v4l2_subdev_get_try_format(sd, cfg, fmt->pad) = fmt->format;
-#else
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(6, 8, 0)
 		*v4l2_subdev_get_try_format(sd, sd_state, fmt->pad) = fmt->format;
+#else
+		*v4l2_subdev_state_get_format(sd_state, fmt->pad) = fmt->format;
 #endif
 	} else {
 		imx390->cur_mode = mode;
@@ -1780,8 +1789,11 @@ static int imx390_get_format(struct v4l2_subdev *sd,
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 14, 0)
 		fmt->format = *v4l2_subdev_get_try_format(&imx390->sd, cfg,
 							  fmt->pad);
-#else
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(6, 8, 0)
 		fmt->format = *v4l2_subdev_get_try_format(&imx390->sd, sd_state,
+							  fmt->pad);
+#else
+		fmt->format = *v4l2_subdev_state_get_format(sd_state,
 							  fmt->pad);
 #endif
 	else
@@ -1882,9 +1894,12 @@ static int imx390_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 14, 0)
 	imx390_update_pad_format(&supported_modes[0],
 				 v4l2_subdev_get_try_format(sd, fh->pad, 0));
-#else
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(6, 8, 0)
 	imx390_update_pad_format(&supported_modes[0],
 				 v4l2_subdev_get_try_format(sd, fh->state, 0));
+#else
+	imx390_update_pad_format(&supported_modes[0],
+				 v4l2_subdev_state_get_format(fh->state, 0));
 #endif
 	mutex_unlock(&imx390->mutex);
 
@@ -1893,7 +1908,9 @@ static int imx390_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 
 static const struct v4l2_subdev_video_ops imx390_video_ops = {
 	.s_stream = imx390_set_stream,
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 8, 0)
 	.g_frame_interval = imx390_g_frame_interval,
+#endif
 };
 
 static const struct v4l2_subdev_pad_ops imx390_pad_ops = {
@@ -1903,6 +1920,9 @@ static const struct v4l2_subdev_pad_ops imx390_pad_ops = {
 	.enum_mbus_code = imx390_enum_mbus_code,
 	.enum_frame_size = imx390_enum_frame_size,
 	.enum_frame_interval = imx390_enum_frame_interval,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0)
+	.get_frame_interval = imx390_g_frame_interval,
+#endif
 };
 
 static const struct v4l2_subdev_ops imx390_subdev_ops = {
@@ -1941,7 +1961,11 @@ static int imx390_identify_module(struct imx390 *imx390)
 	return 0;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0)
 static int imx390_remove(struct i2c_client *client)
+#else
+static void imx390_remove(struct i2c_client *client)
+#endif
 {
 	struct v4l2_subdev *sd = i2c_get_clientdata(client);
 	struct imx390 *imx390 = to_imx390(sd);
@@ -1952,7 +1976,9 @@ static int imx390_remove(struct i2c_client *client)
 	pm_runtime_disable(&client->dev);
 	mutex_destroy(&imx390->mutex);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0)
 	return 0;
+#endif
 }
 
 irqreturn_t imx390_threaded_irq_fn(int irq, void *dev_id)

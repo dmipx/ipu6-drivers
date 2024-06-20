@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-// Copyright (C) 2013 - 2022 Intel Corporation
+// Copyright (C) 2013 - 2024 Intel Corporation
 
 #include <linux/debugfs.h>
 #include <linux/delay.h>
@@ -47,21 +47,9 @@ module_param(async_fw_init, bool, 0664);
 MODULE_PARM_DESC(async_fw_init, "Enable asynchronous firmware initialization");
 
 #define IPU_PSYS_NUM_DEVICES		4
-#define IPU_PSYS_AUTOSUSPEND_DELAY	2000
 
-#ifdef CONFIG_PM
 static int psys_runtime_pm_resume(struct device *dev);
 static int psys_runtime_pm_suspend(struct device *dev);
-#else
-#define pm_runtime_dont_use_autosuspend(d)
-#define pm_runtime_use_autosuspend(d)
-#define pm_runtime_set_autosuspend_delay(d, f)	0
-#define pm_runtime_get_sync(d)			0
-#define pm_runtime_put(d)			0
-#define pm_runtime_put_sync(d)			0
-#define pm_runtime_put_noidle(d)		0
-#define pm_runtime_put_autosuspend(d)		0
-#endif
 
 static dev_t ipu_psys_dev_t;
 static DECLARE_BITMAP(ipu_psys_devices, IPU_PSYS_NUM_DEVICES);
@@ -426,8 +414,7 @@ static int ipu_dma_buf_begin_cpu_access(struct dma_buf *dma_buf,
 	return -ENOTTY;
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0) || LINUX_VERSION_CODE == KERNEL_VERSION(5, 15, 255) \
-	|| LINUX_VERSION_CODE == KERNEL_VERSION(5, 15, 71)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0)  ||  IS_ENABLED(CONFIG_DRM_I915_HAS_SRIOV)
 static int ipu_dma_buf_vmap(struct dma_buf *dmabuf, struct iosys_map *map)
 {
 	struct dma_buf_attachment *attach;
@@ -498,8 +485,7 @@ static void *ipu_dma_buf_vmap(struct dma_buf *dmabuf)
 }
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0) || LINUX_VERSION_CODE == KERNEL_VERSION(5, 15, 255) \
-	|| LINUX_VERSION_CODE == KERNEL_VERSION(5, 15, 71)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0)  ||  IS_ENABLED(CONFIG_DRM_I915_HAS_SRIOV)
 static void ipu_dma_buf_vunmap(struct dma_buf *dmabuf, struct iosys_map *map)
 {
 	struct dma_buf_attachment *attach;
@@ -618,8 +604,7 @@ static inline void ipu_psys_kbuf_unmap(struct ipu_psys_kbuffer *kbuf)
 		return;
 
 	kbuf->valid = false;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0) || LINUX_VERSION_CODE == KERNEL_VERSION(5, 15, 255) \
-	|| LINUX_VERSION_CODE == KERNEL_VERSION(5, 15, 71)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0)  ||  IS_ENABLED(CONFIG_DRM_I915_HAS_SRIOV)
 	if (kbuf->kaddr) {
 		struct iosys_map dmap;
 
@@ -775,11 +760,8 @@ int ipu_psys_mapbuf_locked(int fd, struct ipu_psys_fh *fh,
 {
 	struct ipu_psys *psys = fh->psys;
 	struct dma_buf *dbuf;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0) || LINUX_VERSION_CODE == KERNEL_VERSION(5, 15, 255) \
-	|| LINUX_VERSION_CODE == KERNEL_VERSION(5, 15, 71)
-	struct iosys_map dmap = {
-		.is_iomem = false,
-	};
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0)  ||  IS_ENABLED(CONFIG_DRM_I915_HAS_SRIOV)
+	struct iosys_map dmap;
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0) && LINUX_VERSION_CODE != KERNEL_VERSION(5, 10, 46)
 	struct dma_buf_map dmap;
 #endif
@@ -1105,7 +1087,7 @@ static void ipu_psys_dev_release(struct device *dev)
 {
 }
 
-#ifdef CONFIG_PM
+#if IS_ENABLED(CONFIG_PM)
 static int psys_runtime_pm_resume(struct device *dev)
 {
 	struct ipu_bus_device *adev = to_ipu_bus_device(dev);
@@ -1116,10 +1098,6 @@ static int psys_runtime_pm_resume(struct device *dev)
 	if (!psys)
 		return 0;
 
-	/*
-	 * In runtime autosuspend mode, if the psys is in power on state, no
-	 * need to resume again.
-	 */
 	spin_lock_irqsave(&psys->ready_lock, flags);
 	if (psys->ready) {
 		spin_unlock_irqrestore(&psys->ready_lock, flags);
@@ -1647,13 +1625,8 @@ static int ipu_psys_probe(struct ipu_bus_device *adev)
 	}
 
 	/* Add the hw stepping information to caps */
-	strlcpy(psys->caps.dev_model, IPU_MEDIA_DEV_MODEL_NAME,
+	strscpy(psys->caps.dev_model, IPU_MEDIA_DEV_MODEL_NAME,
 		sizeof(psys->caps.dev_model));
-
-	pm_runtime_set_autosuspend_delay(&psys->adev->dev,
-					 IPU_PSYS_AUTOSUSPEND_DELAY);
-	pm_runtime_use_autosuspend(&psys->adev->dev);
-	pm_runtime_mark_last_busy(&psys->adev->dev);
 
 	mutex_unlock(&ipu_psys_mutex);
 
@@ -1713,8 +1686,6 @@ static void ipu_psys_remove(struct ipu_bus_device *adev)
 		psys->sched_cmd_thread = NULL;
 	}
 
-	pm_runtime_dont_use_autosuspend(&psys->adev->dev);
-
 	mutex_lock(&ipu_psys_mutex);
 
 	list_for_each_entry_safe(kpg, kpg0, &psys->pgs, list) {
@@ -1753,7 +1724,7 @@ static irqreturn_t psys_isr_threaded(struct ipu_bus_device *adev)
 	int r;
 
 	mutex_lock(&psys->mutex);
-#ifdef CONFIG_PM
+#if IS_ENABLED(CONFIG_PM)
 	r = pm_runtime_get_if_in_use(&psys->adev->dev);
 	if (!r || WARN_ON_ONCE(r < 0)) {
 		mutex_unlock(&psys->mutex);
@@ -1769,8 +1740,7 @@ static irqreturn_t psys_isr_threaded(struct ipu_bus_device *adev)
 		ipu_psys_handle_events(psys);
 	}
 
-	pm_runtime_mark_last_busy(&psys->adev->dev);
-	pm_runtime_put_autosuspend(&psys->adev->dev);
+	pm_runtime_put(&psys->adev->dev);
 	mutex_unlock(&psys->mutex);
 
 	return status ? IRQ_HANDLED : IRQ_NONE;
@@ -1845,6 +1815,6 @@ MODULE_AUTHOR("Zaikuo Wang <zaikuo.wang@intel.com>");
 MODULE_AUTHOR("Yunliang Ding <yunliang.ding@intel.com>");
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Intel ipu processing system driver");
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0) || IS_ENABLED(CONFIG_DRM_I915_HAS_SRIOV)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 16, 0) || IS_ENABLED(CONFIG_DRM_I915_HAS_SRIOV)
 MODULE_IMPORT_NS(DMA_BUF);
 #endif

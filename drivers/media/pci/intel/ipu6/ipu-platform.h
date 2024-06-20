@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright (C) 2013 - 2020 Intel Corporation */
+/* Copyright (C) 2013 - 2024 Intel Corporation */
 
 #ifndef IPU_PLATFORM_H
 #define IPU_PLATFORM_H
@@ -13,6 +13,14 @@
 #define IPU6EPMTL_FIRMWARE_NAME		"intel/ipu6epmtl_fw.bin"
 #define IPU6EPMTLES_FIRMWARE_NAME	"intel/ipu6epmtles_fw.bin"
 #define IPU6EPADLN_FIRMWARE_NAME	"intel/ipu6epadln_fw.bin"
+
+#define IPU6SE_FIRMWARE_NAME_NEW	"intel/ipu/ipu6se_fw.bin"
+#define IPU6EP_FIRMWARE_NAME_NEW	"intel/ipu/ipu6ep_fw.bin"
+#define IPU6EPES_FIRMWARE_NAME_NEW	"intel/ipu/ipu6epes_fw.bin"
+#define IPU6_FIRMWARE_NAME_NEW		"intel/ipu/ipu6_fw.bin"
+#define IPU6EPMTL_FIRMWARE_NAME_NEW	"intel/ipu/ipu6epmtl_fw.bin"
+#define IPU6EPMTLES_FIRMWARE_NAME_NEW	"intel/ipu/ipu6epmtles_fw.bin"
+#define IPU6EPADLN_FIRMWARE_NAME_NEW	"intel/ipu/ipu6epadln_fw.bin"
 
 #if IS_ENABLED(CONFIG_VIDEO_INTEL_IPU_USE_PLATFORMDATA) \
 	&& IS_ENABLED(CONFIG_VIDEO_INTEL_IPU_PDATA_DYNAMIC_LOADING)
